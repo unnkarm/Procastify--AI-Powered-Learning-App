@@ -1,5 +1,5 @@
 import { Attachment } from '../types';
-import * as YouTubeTranscript from 'youtube-transcript';
+import { YoutubeTranscript } from 'youtube-transcript';
 import * as cheerio from 'cheerio';
 
 
@@ -29,7 +29,7 @@ export const extractYouTubeTranscript = async (url: string): Promise<ExtractionR
     }
 
     
-    const transcript = await YouTubeTranscript.fetchTranscript(videoId);
+    const transcript = await YoutubeTranscript.fetchTranscript(videoId);
     
     if (!transcript || transcript.length === 0) {
       return { 
