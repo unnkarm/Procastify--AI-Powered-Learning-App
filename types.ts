@@ -44,8 +44,17 @@ export interface NoteElement {
   zIndex: number;
 }
 
+export type BlockType = 'text' | 'h1' | 'h2' | 'h3' | 'bullet' | 'todo' | 'quote';
+
+export interface Block {
+  id: string;
+  type: BlockType;
+  content: string;
+  isChecked?: boolean;
+}
+
 export interface NoteDocument {
-  blocks: any[]; // Tiptap JSON content
+  blocks: Block[]; // Updated to use Block interface
 }
 
 export interface NoteCanvas {

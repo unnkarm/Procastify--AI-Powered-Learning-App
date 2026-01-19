@@ -30,16 +30,19 @@ const Notes: React.FC<NotesProps> = ({ notes, setNotes, onDeleteNote, user, onNa
 
     const getDocumentContent = (note: Note) => {
         const blocks = note.document?.blocks;
-        // Fix: Tiptap expects a wrapper object { type: 'doc', content: [...] }
-        // App.tsx and Note type treat 'blocks' as the array of content nodes.
-        if (Array.isArray(blocks)) {
-            return { type: 'doc', content: blocks };
+        if (Array.isArray(blocks) && blocks.length > 0) {
+            // Check if it's the old Tiptap format or new Block format
+            // Tiptap blocks have "type" but not "id" usually at top level in the same way, or content array.
+            // New blocks have "id" and "content" string. 
+            // If the first item has 'content' as string, it's likely new format.
+            // If 'content' is array, it's Tiptap.
+            const first = blocks[0];
+            if ((first as any).id && typeof (first as any).content === 'string') {
+                return blocks as any; // It's our new Block[]
+            }
         }
-        // Handle legacy or malformed cases where full object might have been saved
-        if (blocks && !Array.isArray(blocks) && (blocks as any).type === 'doc') {
-            return blocks;
-        }
-        return { type: 'doc', content: [] };
+        // Fallback for empty or legacy: Return empty array to let Editor initialize default
+        return [];
     };
 
     const createNote = async () => {
@@ -68,15 +71,12 @@ const Notes: React.FC<NotesProps> = ({ notes, setNotes, onDeleteNote, user, onNa
 
     // Old updateCanvasElements removed as CanvasBoard now handles persistence directly.
 
-    const updateDocumentContent = (newContent: any) => {
+    const updateDocumentContent = (newBlocks: any) => {
         if (!activeNote) return;
-        // Fix: editor.getJSON() returns { type: 'doc', content: [...] }.
-        // We only want to store the content array to stay consistent with App.tsx
-        const contentArray = newContent.content || [];
 
         const updatedNote = {
             ...activeNote,
-            document: { blocks: contentArray },
+            document: { blocks: newBlocks }, // Save the Block[] directly
             lastModified: Date.now()
         };
         StorageService.saveNote(updatedNote);

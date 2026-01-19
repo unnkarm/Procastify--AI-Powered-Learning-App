@@ -1,65 +1,233 @@
-import React from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import { Bold, Italic, Heading1, Heading2, List, ListOrdered, Quote } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Block, BlockType } from '../types';
+import BlockComponent from './BlockEditor/Block';
+import {
+    Bold,
+    Italic,
+    Heading1,
+    Heading2,
+    Heading3,
+    List,
+    Quote,
+    Type,
+    CheckSquare
+} from 'lucide-react';
+
+// Simple ID generator
+const generateId = () => Math.random().toString(36).substr(2, 9);
 
 interface DocumentEditorProps {
-    content: any; // JSON content
-    onUpdate: (content: any) => void;
-    editable?: boolean;
+    content: Block[];
+    onUpdate: (newBlocks: Block[]) => void;
 }
 
-const MenuBar = ({ editor }: { editor: any }) => {
-    if (!editor) return null;
-
-    const buttons = [
-        { icon: Bold, action: () => editor.chain().focus().toggleBold().run(), active: 'bold', title: 'Bold' },
-        { icon: Italic, action: () => editor.chain().focus().toggleItalic().run(), active: 'italic', title: 'Italic' },
-        { icon: Heading1, action: () => editor.chain().focus().toggleHeading({ level: 1 }).run(), active: 'heading', levels: { level: 1 }, title: 'H1' },
-        { icon: Heading2, action: () => editor.chain().focus().toggleHeading({ level: 2 }).run(), active: 'heading', levels: { level: 2 }, title: 'H2' },
-        { icon: List, action: () => editor.chain().focus().toggleBulletList().run(), active: 'bulletList', title: 'Bullet List' },
-        { icon: ListOrdered, action: () => editor.chain().focus().toggleOrderedList().run(), active: 'orderedList', title: 'Ordered List' },
-        { icon: Quote, action: () => editor.chain().focus().toggleBlockquote().run(), active: 'blockquote', title: 'Quote' },
-    ];
-
-    return (
-        <div className="flex items-center gap-1 p-2 bg-black/20 border-b border-white/5 overflow-x-auto rounded-t-lg">
-            {buttons.map((btn, i) => (
-                <button
-                    key={i}
-                    onClick={btn.action}
-                    title={btn.title}
-                    className={`p-1.5 rounded-lg transition-colors ${editor.isActive(btn.active, btn.levels) ? 'bg-[#5865F2] text-white' : 'text-gray-400 hover:bg-white/10 hover:text-white'}`}
-                >
-                    <btn.icon size={16} />
-                </button>
-            ))}
-        </div>
-    );
+const initialBlock: Block = {
+    id: generateId(),
+    type: 'h1',
+    content: 'Untitled',
 };
 
-const DocumentEditor: React.FC<DocumentEditorProps> = ({ content, onUpdate, editable = true }) => {
-    const editor = useEditor({
-        extensions: [
-            StarterKit,
-        ],
-        content: content || { type: 'doc', content: [] },
-        editable: editable,
-        onUpdate: ({ editor }) => {
-            onUpdate(editor.getJSON());
-        },
-        editorProps: {
-            attributes: {
-                class: 'prose prose-invert max-w-none focus:outline-none p-6 min-h-[500px]',
-            },
-        },
+const DocumentEditor: React.FC<DocumentEditorProps> = ({ content, onUpdate }) => {
+    // Initialize blocks with content prop, or default if empty
+    const [blocks, setBlocks] = useState<Block[]>(() => {
+        if (content && content.length > 0) return content;
+        return [initialBlock, { id: generateId(), type: 'text', content: '' }];
     });
 
+    const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
+
+    // Sync internal state if props change drastically (optional, but good for note switching)
+    useEffect(() => {
+        if (content && content !== blocks) {
+            // Only update if IDs don't match or completely different (basic check)
+            // This avoids cursor reset loops. 
+            // A better check implies deep equality or a timestamp, but for now strict ref check + ID check allows switching notes
+            if (content.length > 0 && (blocks.length === 0 || content[0].id !== blocks[0].id)) {
+                setBlocks(content);
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [content]);
+
+    // Propagate updates to parent
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            onUpdate(blocks);
+        }, 500); // Debounce saves slightly
+        return () => clearTimeout(timer);
+    }, [blocks, onUpdate]);
+
+
+    // Focus Logic
+    const handleFocus = (id: string) => {
+        setActiveBlockId(id);
+    };
+
+    // Block CRUD
+    const updateBlock = (id: string, content: string, type?: BlockType, isChecked?: boolean) => {
+        setBlocks((prev) =>
+            prev.map((b) => (b.id === id ? { ...b, content, type: type || b.type, isChecked: isChecked ?? b.isChecked } : b))
+        );
+    };
+
+    const addBlock = (parentId: string, type: BlockType = 'text') => {
+        const newBlock: Block = { id: generateId(), type, content: '' };
+        const index = blocks.findIndex((b) => b.id === parentId);
+        if (index === -1) return;
+
+        const newBlocks = [...blocks];
+        newBlocks.splice(index + 1, 0, newBlock);
+        setBlocks(newBlocks);
+        setActiveBlockId(newBlock.id);
+    };
+
+    const deleteBlock = (id: string) => {
+        if (blocks.length <= 1) return; // Don't delete last block
+        const index = blocks.findIndex((b) => b.id === id);
+        const prevBlock = blocks[index - 1];
+
+        setBlocks((prev) => prev.filter((b) => b.id !== id));
+        if (prevBlock) {
+            setActiveBlockId(prevBlock.id);
+        }
+    };
+
+    // Navigation
+    const handleArrowUp = (index: number) => {
+        if (index > 0) setActiveBlockId(blocks[index - 1].id);
+    };
+
+    const handleArrowDown = (index: number) => {
+        if (index < blocks.length - 1) setActiveBlockId(blocks[index + 1].id);
+    };
+
+    // Toolbar Handlers
+    const toggleBlockType = (type: BlockType) => {
+        if (!activeBlockId) return;
+        const block = blocks.find(b => b.id === activeBlockId);
+        if (block) {
+            // Toggle off if already active (revert to text), unless it's text
+            const newType = block.type === type && type !== 'text' ? 'text' : type;
+            updateBlock(activeBlockId, block.content, newType);
+        }
+    };
+
+    const toggleInlineStyle = (style: string) => {
+        document.execCommand(style);
+        // Force focus back if needed, though execCommand usually works on selection
+    };
+
+    const ToolbarButton = ({
+        icon: Icon,
+        isActive,
+        onClick
+    }: {
+        icon: any,
+        isActive?: boolean,
+        onClick: () => void
+    }) => (
+        <button
+            onMouseDown={(e) => {
+                e.preventDefault(); // Prevent losing focus from editor
+                onClick();
+            }}
+            className={`p-2 rounded hover:bg-white/10 transition-colors ${isActive ? 'bg-white/20 text-white' : 'text-gray-400'
+                }`}
+        >
+            <Icon size={18} />
+        </button>
+    );
+
+    const activeBlock = blocks.find(b => b.id === activeBlockId);
+
     return (
-        <div className="flex flex-col h-full bg-[#1e1f22] rounded-lg border border-white/5 overflow-hidden">
-            {editable && <MenuBar editor={editor} />}
-            <div className="flex-1 overflow-y-auto">
-                <EditorContent editor={editor} />
+        <div className="bg-[#1e1f22] text-[#e5e7eb] flex flex-col h-full">
+
+            {/* Top Toolbar */}
+            <div className="sticky top-0 z-40 w-full bg-[#2b2d31] border-b border-[#1e1f22] flex justify-center shadow-md shrink-0">
+                <div className="flex items-center gap-1 py-2 px-4 w-full overflow-x-auto">
+                    <div className="flex items-center gap-1 border-r border-gray-700 pr-2 mr-2">
+                        <ToolbarButton
+                            icon={Bold}
+                            onClick={() => toggleInlineStyle('bold')}
+                        />
+                        <ToolbarButton
+                            icon={Italic}
+                            onClick={() => toggleInlineStyle('italic')}
+                        />
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                        <ToolbarButton
+                            icon={Type}
+                            isActive={activeBlock?.type === 'text'}
+                            onClick={() => toggleBlockType('text')}
+                        />
+                        <ToolbarButton
+                            icon={Heading1}
+                            isActive={activeBlock?.type === 'h1'}
+                            onClick={() => toggleBlockType('h1')}
+                        />
+                        <ToolbarButton
+                            icon={Heading2}
+                            isActive={activeBlock?.type === 'h2'}
+                            onClick={() => toggleBlockType('h2')}
+                        />
+                        <ToolbarButton
+                            icon={Heading3}
+                            isActive={activeBlock?.type === 'h3'}
+                            onClick={() => toggleBlockType('h3')}
+                        />
+                        <ToolbarButton
+                            icon={List}
+                            isActive={activeBlock?.type === 'bullet'}
+                            onClick={() => toggleBlockType('bullet')}
+                        />
+                        <ToolbarButton
+                            icon={CheckSquare}
+                            isActive={activeBlock?.type === 'todo'}
+                            onClick={() => toggleBlockType('todo')}
+                        />
+                        <ToolbarButton
+                            icon={Quote}
+                            isActive={activeBlock?.type === 'quote'}
+                            onClick={() => toggleBlockType('quote')}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <div className="w-full flex-1 overflow-y-auto px-12 py-8">
+                {/* Editor Area */}
+                <div className="flex flex-col gap-1 max-w-3xl mx-auto">
+                    {blocks.map((block, index) => (
+                        <BlockComponent
+                            key={block.id}
+                            index={index}
+                            block={block}
+                            isFocused={activeBlockId === block.id}
+                            activeId={activeBlockId}
+                            updateBlock={updateBlock}
+                            addBlock={addBlock}
+                            deleteBlock={deleteBlock}
+                            onFocus={handleFocus}
+                            onEnter={(id) => addBlock(id)}
+                            onArrowUp={handleArrowUp}
+                            onArrowDown={handleArrowDown}
+                        />
+                    ))}
+                </div>
+
+                {/* Bottom spacer */}
+                <div
+                    className="h-64 cursor-text"
+                    onClick={() => {
+                        if (blocks.length > 0) {
+                            handleFocus(blocks[blocks.length - 1].id);
+                        }
+                    }}
+                />
+
             </div>
         </div>
     );
