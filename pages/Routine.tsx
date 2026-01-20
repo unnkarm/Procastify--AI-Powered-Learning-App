@@ -42,6 +42,20 @@ const Routine: React.FC<RoutineProps> = ({ user, setUser, notes, setNotes, onSta
         loadData();
     }, [user.id]);
 
+    // Clean up stale queue items that reference non-existent notes
+    useEffect(() => {
+        if (notes.length > 0 && queue.length > 0) {
+            const noteIds = new Set(notes.map(n => n.id));
+            const validQueue = queue.filter(item => noteIds.has(item.noteId));
+
+            // Only update if we found invalid items to avoid infinite loops
+            if (validQueue.length !== queue.length) {
+                console.log('[Routine] Removing stale queue items:', queue.length - validQueue.length);
+                setQueue(validQueue);
+            }
+        }
+    }, [notes, queue]);
+
 
     useEffect(() => {
 
@@ -56,29 +70,47 @@ const Routine: React.FC<RoutineProps> = ({ user, setUser, notes, setNotes, onSta
 
 
     const addToQueue = async (noteId: string) => {
-
+        // Already in queue?
         if (queue.find(q => q.noteId === noteId)) return;
 
-
+        // Analyze note if it doesn't have AI analysis
         setLoadingAnalysis(noteId);
         let note = notes.find(n => n.id === noteId);
 
         if (note) {
+            // Debug: Check what structure the note has
+            console.log('[Routine] Note structure:', {
+                id: note.id,
+                title: note.title,
+                hasDocument: !!note.document,
+                hasBlocks: !!note.document?.blocks,
+                blocksLength: note.document?.blocks?.length,
+                blocks: note.document?.blocks,
+                hasAiAnalysis: !!note.aiAnalysis
+            });
 
-            if (!note.aiAnalysis && note.elements.length > 0) {
+            // Check if note has content in document.blocks
+            const hasContent = note.document?.blocks && note.document.blocks.length > 0;
 
-                const textContent = note.elements.map(e => e.content || "").join("\n");
+            if (!note.aiAnalysis && hasContent) {
+                // Extract text from document blocks
+                const textContent = note.document.blocks.map(block => block.content || "").join("\n");
+                console.log('[Routine] Analyzing note with content:', textContent.substring(0, 100));
+
                 const analysis = await analyzeNoteWorkload(textContent || "Empty Note");
+                console.log('[Routine] Analysis result:', analysis);
 
-
+                // Update the note with analysis
                 const updatedNote = { ...note, aiAnalysis: analysis };
                 const updatedNotes = notes.map(n => n.id === noteId ? updatedNote : n);
                 setNotes(updatedNotes);
+            } else {
+                console.log('[Routine] Skipping analysis - hasContent:', hasContent, 'hasAiAnalysis:', !!note.aiAnalysis);
             }
         }
         setLoadingAnalysis(null);
 
-
+        // Add to queue
         setQueue([...queue, { id: Date.now().toString(), userId: user.id, noteId, priority: 'medium', status: 'pending' }]);
     };
 
@@ -208,56 +240,58 @@ const Routine: React.FC<RoutineProps> = ({ user, setUser, notes, setNotes, onSta
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {queue.map((item, idx) => {
-                                const note = notes.find(n => n.id === item.noteId);
-                                return (
-                                    <div key={item.id} className="bg-discord-bg p-4 rounded-xl border border-white/5 flex items-center justify-between group">
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex flex-col items-center justify-center w-12 h-12 bg-discord-panel rounded-lg border border-white/5 text-discord-textMuted font-bold text-lg">
-                                                {idx + 1}
-                                            </div>
-                                            <div>
-                                                <h4 className="font-bold text-white text-lg">{note?.title}</h4>
-                                                <div className="flex items-center gap-3 mt-1">
-                                                    {note?.aiAnalysis ? (
-                                                        <>
-                                                            <span className={`text-xs px-2 py-0.5 rounded capitalize ${getDifficultyColor(note?.aiAnalysis.difficulty)}`}>
-                                                                {note?.aiAnalysis.difficulty}
-                                                            </span>
-                                                            <span className="text-xs text-discord-textMuted flex items-center gap-1">
-                                                                <Clock size={12} /> {note?.aiAnalysis.estimatedMinutes}m est.
-                                                            </span>
-                                                            <span className="text-xs text-discord-textMuted capitalize">
-                                                                Load: {note?.aiAnalysis.cognitiveLoad}
-                                                            </span>
-                                                        </>
-                                                    ) : (
-                                                        <span className="text-xs text-discord-textMuted italic">Analysis pending...</span>
-                                                    )}
+                            {queue
+                                .filter(item => notes.find(n => n.id === item.noteId)) // Validate items before rendering
+                                .map((item, idx) => {
+                                    const note = notes.find(n => n.id === item.noteId);
+                                    return (
+                                        <div key={item.id} className="bg-discord-bg p-4 rounded-xl border border-white/5 flex items-center justify-between group">
+                                            <div className="flex items-center gap-4">
+                                                <div className="flex flex-col items-center justify-center w-12 h-12 bg-discord-panel rounded-lg border border-white/5 text-discord-textMuted font-bold text-lg">
+                                                    {idx + 1}
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-bold text-white text-lg">{note?.title}</h4>
+                                                    <div className="flex items-center gap-3 mt-1">
+                                                        {note?.aiAnalysis ? (
+                                                            <>
+                                                                <span className={`text-xs px-2 py-0.5 rounded capitalize ${getDifficultyColor(note?.aiAnalysis.difficulty)}`}>
+                                                                    {note?.aiAnalysis.difficulty}
+                                                                </span>
+                                                                <span className="text-xs text-discord-textMuted flex items-center gap-1">
+                                                                    <Clock size={12} /> {note?.aiAnalysis.estimatedMinutes}m est.
+                                                                </span>
+                                                                <span className="text-xs text-discord-textMuted capitalize">
+                                                                    Load: {note?.aiAnalysis.cognitiveLoad}
+                                                                </span>
+                                                            </>
+                                                        ) : (
+                                                            <span className="text-xs text-discord-textMuted italic">Analysis pending...</span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
 
-                                        <div className="flex items-center gap-4">
-                                            <select
-                                                value={item.priority}
-                                                onChange={(e) => {
-                                                    const updated = queue.map(q => q.id === item.id ? { ...q, priority: e.target.value as any } : q);
-                                                    setQueue(updated);
-                                                }}
-                                                className="bg-discord-panel text-sm text-white border border-white/10 rounded-lg px-2 py-1 focus:outline-none"
-                                            >
-                                                <option value="high">High Priority</option>
-                                                <option value="medium">Medium</option>
-                                                <option value="low">Low</option>
-                                            </select>
-                                            <button onClick={() => removeFromQueue(item.id)} className="text-discord-textMuted hover:text-red-400 transition-colors">
-                                                <Trash2 size={18} />
-                                            </button>
+                                            <div className="flex items-center gap-4">
+                                                <select
+                                                    value={item.priority}
+                                                    onChange={(e) => {
+                                                        const updated = queue.map(q => q.id === item.id ? { ...q, priority: e.target.value as any } : q);
+                                                        setQueue(updated);
+                                                    }}
+                                                    className="bg-discord-panel text-sm text-white border border-white/10 rounded-lg px-2 py-1 focus:outline-none"
+                                                >
+                                                    <option value="high">High Priority</option>
+                                                    <option value="medium">Medium</option>
+                                                    <option value="low">Low</option>
+                                                </select>
+                                                <button onClick={() => removeFromQueue(item.id)} className="text-discord-textMuted hover:text-red-400 transition-colors">
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
                                         </div>
-                                    </div>
-                                );
-                            })}
+                                    );
+                                })}
                         </div>
                     )}
                 </div>
