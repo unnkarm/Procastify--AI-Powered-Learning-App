@@ -147,10 +147,17 @@ const BlockComponent: React.FC<BlockProps> = ({
         }
 
         if (e.key === 'Enter') {
-            if (e.shiftKey) return;
-            e.preventDefault();
-            onEnter(block.id, e);
-        } else if (e.key === 'Backspace') {
+    
+    if (block.type === 'code') {
+        return;
+    }
+
+    if (e.shiftKey) return;
+
+    e.preventDefault();
+    onEnter(block.id, e);
+}
+ else if (e.key === 'Backspace') {
             // Logic to merge or delete block if empty
             if (contentRef.current && contentRef.current.innerText.length === 0 && block.content === '') {
                 e.preventDefault();
