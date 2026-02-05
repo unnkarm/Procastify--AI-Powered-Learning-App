@@ -1,4 +1,4 @@
-import { UserStats, UserPreferences, Note, Summary, QueueItem, RoutineTask, Quiz } from '../types';
+import { UserStats, UserPreferences, Note, Summary, QueueItem, RoutineTask, Quiz, CustomMode } from '../types';
 import { db } from '../firebaseConfig';
 import { doc, getDoc, setDoc, collection, getDocs, writeBatch, query, where, serverTimestamp } from 'firebase/firestore';
 import { FirebaseService } from './firebaseService';
@@ -12,7 +12,8 @@ const LOCAL_KEYS = {
     SUMMARIES: 'procastify_summaries',
     QUEUE: 'procastify_queue',
     TASKS: 'procastify_tasks',
-    QUIZZES: 'procastify_quizzes'
+    QUIZZES: 'procastify_quizzes',
+    CUSTOM_MODES: 'procastify_custom_modes'
 };
 
 
@@ -200,9 +201,7 @@ export const StorageService = {
     // --- Notes ---
 
     deleteNote: async (noteId: string) => {
-        console.log("[DELETE] Requested delete for note:", noteId);
         if (!currentUserId) {
-            console.warn("[DELETE] No user session found, aborting delete.");
             return;
         }
 
@@ -210,9 +209,8 @@ export const StorageService = {
         if (!isGuestMode) {
             try {
                 await FirebaseService.deleteNote(currentUserId, noteId);
-                console.log("[DELETE] Firestore delete success:", noteId);
             } catch (e) {
-                console.error("[DELETE] Firestore delete failed:", e);
+                console.error("Error deleting note from Firestore:", e);
                 throw e; // Stop execution if source of truth fails
             }
         }
@@ -221,7 +219,6 @@ export const StorageService = {
         const canvasKey = `procastify_canvas_${noteId}`;
         if (localStorage.getItem(canvasKey)) {
             localStorage.removeItem(canvasKey);
-            console.log("[DELETE] Removed from localStorage (canvas cache):", noteId);
         }
 
         // 3. Guest Mode - Local Storage "Database" Deletion
@@ -229,10 +226,7 @@ export const StorageService = {
             const notes = getLocalUserItems<Note>(LOCAL_KEYS.NOTES, currentUserId);
             const filtered = notes.filter(n => n.id !== noteId);
             saveLocalUserItems(LOCAL_KEYS.NOTES, currentUserId, filtered);
-            console.log("[DELETE] Removed from localStorage (guest db):", noteId);
         }
-
-        console.log("[DELETE] Delete operation completed successfully:", noteId);
     },
 
     saveNote: async (note: Note) => {
@@ -313,7 +307,6 @@ export const StorageService = {
                 if (snap.exists()) {
                     const data = snap.data();
                     const elems = data.canvas?.elements || [];
-                    console.log(`[STORAGE] getCanvasElements found ${elems.length} items for ${noteId}`);
                     return elems;
                 }
             } catch (e) {
@@ -449,6 +442,53 @@ export const StorageService = {
         }
     },
 
+    // --- Custom Modes ---
+
+    saveCustomMode: async (customMode: CustomMode): Promise<void> => {
+        if (!currentUserId) throw new Error("No user logged in");
+
+        const modeToSave: CustomMode = { ...customMode, userId: currentUserId };
+
+        if (isGuestMode) {
+            const modes = getLocalUserItems<CustomMode>(LOCAL_KEYS.CUSTOM_MODES, currentUserId);
+            const existingIndex = modes.findIndex(m => m.id === modeToSave.id);
+            
+            if (existingIndex >= 0) {
+                modes[existingIndex] = modeToSave;
+            } else {
+                modes.push(modeToSave);
+            }
+            
+            saveLocalUserItems(LOCAL_KEYS.CUSTOM_MODES, currentUserId, modes);
+        } else {
+            const docRef = doc(db, 'users', currentUserId, 'custom_modes', modeToSave.id);
+            await setDoc(docRef, modeToSave);
+        }
+    },
+
+    getCustomModes: async (): Promise<CustomMode[]> => {
+        if (!currentUserId) return [];
+
+        if (isGuestMode) {
+            return getLocalUserItems<CustomMode>(LOCAL_KEYS.CUSTOM_MODES, currentUserId);
+        } else {
+            return await StorageService.loadCollection<CustomMode>('custom_modes');
+        }
+    },
+
+    deleteCustomMode: async (modeId: string): Promise<void> => {
+        if (!currentUserId) throw new Error("No user logged in");
+
+        if (isGuestMode) {
+            const modes = getLocalUserItems<CustomMode>(LOCAL_KEYS.CUSTOM_MODES, currentUserId);
+            const filtered = modes.filter(m => m.id !== modeId);
+            saveLocalUserItems(LOCAL_KEYS.CUSTOM_MODES, currentUserId, filtered);
+        } else {
+            const docRef = doc(db, 'users', currentUserId, 'custom_modes', modeId);
+            await FirebaseService.deleteDocument(docRef);
+        }
+    },
+
 
     // --- Helpers ---
 
@@ -461,7 +501,8 @@ export const StorageService = {
                 'summaries': LOCAL_KEYS.SUMMARIES,
                 'queue': LOCAL_KEYS.QUEUE,
                 'tasks': LOCAL_KEYS.TASKS,
-                'quizzes': LOCAL_KEYS.QUIZZES
+                'quizzes': LOCAL_KEYS.QUIZZES,
+                'custom_modes': LOCAL_KEYS.CUSTOM_MODES
             };
             const key = map[collectionName];
             if (!key) return [];

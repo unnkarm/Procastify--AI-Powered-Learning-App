@@ -125,13 +125,21 @@ export interface Attachment {
   name?: string;
 }
 
+export interface CustomMode {
+  id: string;
+  userId: string;
+  name: string;
+  systemPrompt: string;
+  createdAt: number;
+}
+
 export interface Summary {
   id: string;
   userId: string;
   originalSource: string;
   summaryText: string;
   type: 'text' | 'video' | 'article' | 'pdf' | 'audio' | 'mixed';
-  mode: 'short' | 'detailed' | 'eli5' | 'exam';
+  mode: string; // Now supports any string (preset modes or custom mode names)
   createdAt: number;
   flashcards?: Flashcard[];
 }

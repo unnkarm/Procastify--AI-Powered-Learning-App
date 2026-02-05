@@ -94,6 +94,11 @@ export const FirebaseService = {
         }
     },
 
+    // --- Generic document operations ---
+    deleteDocument: async (docRef: any) => {
+        await deleteDoc(docRef);
+    },
+
     // --- Stats (Unchanged logic, kept for interface consistency) ---
     saveDailyActivity: async (userId: string, dateKey: string, minutes: number) => { }
 };

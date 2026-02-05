@@ -4,14 +4,10 @@ import { getFirestore } from "firebase/firestore";
 
 
 const getEnv = (key: string) => {
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env) {
-        // @ts-ignore
-        return import.meta.env[`VITE_${key}`] || import.meta.env[`REACT_APP_${key}`];
+    if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
+        return (import.meta as any).env[`VITE_${key}`] || (import.meta as any).env[`REACT_APP_${key}`];
     }
-    // @ts-ignore
     if (typeof process !== 'undefined' && process.env) {
-        // @ts-ignore
         return process.env[`REACT_APP_${key}`] || process.env[key];
     }
     return undefined;

@@ -1,8 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { summarizeContent, generateFlashcards, generateSpeech, playAudioBlob } from '../services/geminiService';
-import { Summary, Flashcard, Note, Attachment } from '../types';
-import { Sparkles, FileText, Link as LinkIcon, Image as ImageIcon, Mic, FileUp, Volume2, Plus, Square, X, Paperclip, ChevronRight, StopCircle, CheckCircle, FilePlus, BookOpen } from 'lucide-react';
+import { Summary, Flashcard, Note, Attachment, CustomMode } from '../types';
+import { Sparkles, Link as LinkIcon, Mic, FileUp, Volume2, Plus, X, Paperclip, CheckCircle, FilePlus, BookOpen, Edit3, Trash2, Save } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { StorageService } from '../services/storageService';
 
 interface SummarizerProps {
     onSave: (summary: Summary) => void;
@@ -19,6 +20,10 @@ const Summarizer: React.FC<SummarizerProps> = ({ onSave, notes, onAddToNote }) =
     const [mode, setMode] = useState<string>('short');
     const [showCustomModeInput, setShowCustomModeInput] = useState(false);
     const [customModeText, setCustomModeText] = useState('');
+    const [customModePrompt, setCustomModePrompt] = useState('');
+    const [customModes, setCustomModes] = useState<CustomMode[]>([]);
+    const [showCustomModeModal, setShowCustomModeModal] = useState(false);
+    const [editingCustomMode, setEditingCustomMode] = useState<CustomMode | null>(null);
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState('');
     const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
@@ -41,12 +46,82 @@ const Summarizer: React.FC<SummarizerProps> = ({ onSave, notes, onAddToNote }) =
     const audioChunksRef = useRef<Blob[]>([]);
     const timerRef = useRef<any>(null);
 
+    // Load custom modes on mount
+    useEffect(() => {
+        loadCustomModes();
+    }, []);
+
+    const loadCustomModes = async () => {
+        try {
+            const modes = await StorageService.getCustomModes();
+            setCustomModes(modes);
+        } catch (error) {
+            console.error('Error loading custom modes:', error);
+        }
+    };
+
+    const saveCustomMode = async () => {
+        if (!customModeText.trim() || !customModePrompt.trim()) return;
+        
+        try {
+            const newMode: CustomMode = {
+                id: editingCustomMode?.id || Date.now().toString(),
+                userId: StorageService.currentUserId || '',
+                name: customModeText.trim(),
+                systemPrompt: customModePrompt.trim(),
+                createdAt: editingCustomMode?.createdAt || Date.now()
+            };
+
+            await StorageService.saveCustomMode(newMode);
+            await loadCustomModes();
+            
+            // Set the new mode as active
+            setMode(newMode.name);
+            
+            // Reset form
+            setCustomModeText('');
+            setCustomModePrompt('');
+            setShowCustomModeModal(false);
+            setEditingCustomMode(null);
+        } catch (error) {
+            console.error('Error saving custom mode:', error);
+            // Show user-friendly error message
+            alert('Failed to save custom mode. Please try again.');
+        }
+    };
+
+    const editCustomMode = (customMode: CustomMode) => {
+        setEditingCustomMode(customMode);
+        setCustomModeText(customMode.name);
+        setCustomModePrompt(customMode.systemPrompt);
+        setShowCustomModeModal(true);
+    };
+
+    const deleteCustomMode = async (modeId: string) => {
+        try {
+            await StorageService.deleteCustomMode(modeId);
+            await loadCustomModes();
+            
+            // If the deleted mode was active, switch to short mode
+            const deletedMode = customModes.find(m => m.id === modeId);
+            if (deletedMode && mode === deletedMode.name) {
+                setMode('short');
+            }
+        } catch (error) {
+            console.error('Error deleting custom mode:', error);
+            alert('Failed to delete custom mode. Please try again.');
+        }
+    };
+
+    const getCustomPromptForMode = (modeName: string): string | undefined => {
+        const customMode = customModes.find(m => m.name === modeName);
+        return customMode?.systemPrompt;
+    };
 
 
     const addAttachment = (att: Attachment) => {
         setAttachments(prev => {
             const updated = [...prev, att];
-            console.log('Updated attachments:', updated);
             return updated;
         });
     };
@@ -58,7 +133,6 @@ const Summarizer: React.FC<SummarizerProps> = ({ onSave, notes, onAddToNote }) =
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'pdf') => {
         const file = e.target.files?.[0];
-        console.log('Raw file object:', file);
         if (file) {
             const reader = new FileReader();
             reader.onload = (ev) => {
@@ -184,10 +258,12 @@ const Summarizer: React.FC<SummarizerProps> = ({ onSave, notes, onAddToNote }) =
         setExtractionWarnings([]);
 
         try {
+            // Get custom prompt if using a custom mode
+            const customPrompt = getCustomPromptForMode(mode);
+            
             // summarizeContent in geminiService handles the normalization via extractionService
-            const summaryText = await summarizeContent(textContext, attachments, mode);
+            const summaryText = await summarizeContent(textContext, attachments, mode, customPrompt);
             setResult(summaryText);
-
 
             const newSummary: Summary = {
                 id: Date.now().toString(),
@@ -290,12 +366,12 @@ const Summarizer: React.FC<SummarizerProps> = ({ onSave, notes, onAddToNote }) =
 
 
                     <div>
-                        <div className="bg-discord-panel p-1 rounded-xl border border-white/5 flex gap-1 mb-2">
+                        <div className="bg-discord-panel p-1 rounded-xl border border-white/5 flex gap-1 mb-2 flex-wrap">
                             {(['short', 'detailed', 'eli5', 'exam'] as const).map((m) => (
                                 <button
                                     key={m}
                                     onClick={() => setMode(m)}
-                                    className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all flex items-center justify-center
+                                    className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all flex items-center justify-center min-w-16
                                 ${mode === m
                                             ? 'bg-discord-accent text-white shadow-md'
                                             : 'text-discord-textMuted hover:bg-discord-hover'}`}
@@ -304,36 +380,83 @@ const Summarizer: React.FC<SummarizerProps> = ({ onSave, notes, onAddToNote }) =
                                 </button>
                             ))}
 
+                            {/* Custom modes */}
+                            {customModes.map((customMode) => (
+                                <div key={customMode.id} className="relative flex group">
+                                    <button
+                                        onClick={() => setMode(customMode.name)}
+                                        className={`px-3 py-2 rounded-lg text-xs font-bold tracking-wide transition-all flex items-center justify-center
+                                    ${mode === customMode.name
+                                                ? 'bg-purple-600 text-white shadow-md'
+                                                : 'text-discord-textMuted hover:bg-discord-hover'}`}
+                                        title={customMode.systemPrompt}
+                                    >
+                                        {customMode.name}
+                                    </button>
+                                    <div className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                        <button
+                                            onClick={() => editCustomMode(customMode)}
+                                            className="w-4 h-4 bg-blue-500 hover:bg-blue-600 text-white rounded-full flex items-center justify-center text-xs"
+                                            title="Edit"
+                                        >
+                                            <Edit3 size={10} />
+                                        </button>
+                                        <button
+                                            onClick={() => deleteCustomMode(customMode.id)}
+                                            className="w-4 h-4 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xs"
+                                            title="Delete"
+                                        >
+                                            <Trash2 size={10} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+
                             <div className="relative flex">
                                 <button
-                                    onClick={() => setShowCustomModeInput(!showCustomModeInput)}
-                                    className={`w-10 rounded-lg text-xs font-bold transition-all flex items-center justify-center flex-none ${showCustomModeInput ? 'bg-discord-accent text-white' : 'text-discord-textMuted hover:bg-discord-hover'
-                                        }`}
-                                    title="Add custom mode"
+                                    onClick={() => {
+                                        setShowCustomModeModal(true);
+                                        setCustomModeText('');
+                                        setCustomModePrompt('');
+                                        setEditingCustomMode(null);
+                                    }}
+                                    className="w-10 rounded-lg text-xs font-bold transition-all flex items-center justify-center flex-none text-discord-textMuted hover:bg-discord-hover"
+                                    title="Create new custom mode"
                                 >
                                     +
                                 </button>
 
                                 {showCustomModeInput && (
-                                    <div className="absolute right-0 top-full mt-2 bg-discord-panel border border-white/10 rounded-lg shadow-2xl p-3 w-64 z-50 origin-top-right animate-in fade-in zoom-in-95">
-                                        <input
-                                            type="text"
-                                            value={customModeText}
-                                            onChange={(e) => setCustomModeText(e.target.value)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' && customModeText.trim()) {
-                                                    setMode(customModeText.trim());
-                                                    setCustomModeText('');
-                                                    setShowCustomModeInput(false);
-                                                } else if (e.key === 'Escape') {
-                                                    setShowCustomModeInput(false);
-                                                    setCustomModeText('');
-                                                }
+                                    <div className="absolute right-0 top-full mt-2 bg-discord-panel border border-white/10 rounded-lg shadow-2xl p-3 w-80 z-50 origin-top-right animate-in fade-in zoom-in-95">
+                                        <div className="mb-3">
+                                            <label className="text-xs font-bold text-discord-textMuted uppercase mb-1 block">Quick Create Mode</label>
+                                            <input
+                                                type="text"
+                                                value={customModeText}
+                                                onChange={(e) => setCustomModeText(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' && customModeText.trim()) {
+                                                        setShowCustomModeModal(true);
+                                                        setShowCustomModeInput(false);
+                                                    } else if (e.key === 'Escape') {
+                                                        setShowCustomModeInput(false);
+                                                        setCustomModeText('');
+                                                    }
+                                                }}
+                                                placeholder="e.g., creative, technical, casual..."
+                                                className="w-full bg-discord-bg border border-white/10 rounded px-3 py-2 text-sm text-white placeholder-discord-textMuted/50 focus:outline-none focus:border-discord-accent transition-colors"
+                                                autoFocus
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                setShowCustomModeModal(true);
+                                                setShowCustomModeInput(false);
                                             }}
-                                            placeholder="e.g., creative, technical, casual..."
-                                            className="w-full bg-discord-bg border border-white/10 rounded px-3 py-2 text-sm text-white placeholder-discord-textMuted/50 focus:outline-none focus:border-discord-accent transition-colors"
-                                            autoFocus
-                                        />
+                                            className="w-full px-3 py-2 bg-discord-accent hover:bg-discord-accentHover text-white text-xs font-medium rounded transition-colors"
+                                        >
+                                            Define Prompt
+                                        </button>
                                     </div>
                                 )}
                             </div>
@@ -341,7 +464,10 @@ const Summarizer: React.FC<SummarizerProps> = ({ onSave, notes, onAddToNote }) =
 
                         <div className="flex items-center gap-2 px-2 py-1">
                             <span className="text-xs font-bold text-discord-textMuted uppercase">Current Mode:</span>
-                            <span className="px-2 py-1 bg-discord-accent/20 border border-discord-accent/50 rounded text-xs font-bold text-discord-accent capitalize">
+                            <span className={`px-2 py-1 border rounded text-xs font-bold capitalize ${customModes.find(m => m.name === mode) 
+                                    ? 'bg-purple-600/20 border-purple-600/50 text-purple-400'
+                                    : 'bg-discord-accent/20 border-discord-accent/50 text-discord-accent'
+                                }`}>
                                 {mode === 'eli5' ? 'ELI5' : mode}
                             </span>
                         </div>
@@ -565,6 +691,85 @@ const Summarizer: React.FC<SummarizerProps> = ({ onSave, notes, onAddToNote }) =
                                 </div>
                             </div>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* Custom Mode Modal */}
+            {showCustomModeModal && (
+                <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+                    <div className="bg-discord-panel p-6 rounded-2xl w-full max-w-lg border border-white/10 shadow-2xl animate-in zoom-in-95">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-bold text-white">
+                                {editingCustomMode ? 'Edit Custom Mode' : 'Create Custom Mode'}
+                            </h3>
+                            <button 
+                                onClick={() => {
+                                    setShowCustomModeModal(false);
+                                    setCustomModeText('');
+                                    setCustomModePrompt('');
+                                    setEditingCustomMode(null);
+                                }} 
+                                className="text-discord-textMuted hover:text-white"
+                            >
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-white mb-2">Mode Name</label>
+                                <input
+                                    type="text"
+                                    value={customModeText}
+                                    onChange={(e) => setCustomModeText(e.target.value)}
+                                    placeholder="e.g., Technical, Creative, Research Notes"
+                                    className="w-full bg-discord-bg border border-white/10 rounded-lg px-4 py-3 text-white placeholder-discord-textMuted/50 focus:outline-none focus:border-discord-accent transition-colors"
+                                    autoFocus
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-white mb-2">System Prompt</label>
+                                <textarea
+                                    value={customModePrompt}
+                                    onChange={(e) => setCustomModePrompt(e.target.value)}
+                                    placeholder="Define how the AI should summarize content in this mode. For example: 'Summarize with a focus on technical concepts and include code examples when relevant.'"
+                                    className="w-full h-32 bg-discord-bg border border-white/10 rounded-lg px-4 py-3 text-white placeholder-discord-textMuted/50 focus:outline-none focus:border-discord-accent transition-colors resize-none"
+                                />
+                            </div>
+
+                            <div className="bg-discord-bg/50 rounded-lg p-4 border border-white/5">
+                                <h4 className="text-sm font-medium text-white mb-2">Examples:</h4>
+                                <div className="space-y-2 text-xs text-discord-textMuted">
+                                    <div><strong>Technical:</strong> "Focus on technical concepts, include definitions, and use bullet points for clarity."</div>
+                                    <div><strong>Creative:</strong> "Write in an engaging, narrative style with creative analogies and examples."</div>
+                                    <div><strong>Research:</strong> "Organize information hierarchically with key findings, methodologies, and conclusions."</div>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    onClick={() => {
+                                        setShowCustomModeModal(false);
+                                        setCustomModeText('');
+                                        setCustomModePrompt('');
+                                        setEditingCustomMode(null);
+                                    }}
+                                    className="px-4 py-2 text-discord-textMuted hover:text-white transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={saveCustomMode}
+                                    disabled={!customModeText.trim() || !customModePrompt.trim()}
+                                    className="px-6 py-2 bg-discord-accent hover:bg-discord-accentHover text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                >
+                                    <Save size={16} />
+                                    {editingCustomMode ? 'Update' : 'Create'}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
