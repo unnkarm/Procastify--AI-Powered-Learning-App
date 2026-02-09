@@ -32,7 +32,7 @@ import Folders from "./pages/Folders";
 import { AlertCircle, LogIn, X, Loader2 } from "lucide-react";
 
 const App: React.FC = () => {
-  const [view, setView] = useState<ViewState>("landing");
+  const [view, setView] = useState<ViewState | "folders">("landing");
   const [user, setUser] = useState<UserPreferences | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [summaries, setSummaries] = useState<Summary[]>([]);
@@ -42,11 +42,6 @@ const App: React.FC = () => {
   const [focusTask, setFocusTask] = useState<RoutineTask | undefined>(
     undefined,
   );
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [emailInput, setEmailInput] = useState("");
-  const [passwordInput, setPasswordInput] = useState("");
-  const [authError, setAuthError] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Folder filtering state
@@ -68,7 +63,7 @@ const App: React.FC = () => {
           profile = {
             id: firebaseUser.uid,
             isGuest: false,
-            name: deriveName(firebaseUser.email),
+            name: firebaseUser.displayName || deriveName(firebaseUser.email),
             freeTimeHours: 2,
             energyPeak: "morning",
             goal: "Productivity",
@@ -124,24 +119,6 @@ const App: React.FC = () => {
     setView("dashboard");
   };
 
-  const handleAuthSubmit = async () => {
-    if (!emailInput || !passwordInput) return;
-    setAuthError("");
-    try {
-      if (isSignUp) {
-        await createUserWithEmailAndPassword(auth, emailInput, passwordInput);
-      } else {
-        await signInWithEmailAndPassword(auth, emailInput, passwordInput);
-      }
-      setShowLoginModal(false);
-      setEmailInput("");
-      setPasswordInput("");
-    } catch (e: any) {
-      console.error(e);
-      setAuthError(e.message || "Authentication failed");
-    }
-  };
-
   const handleLogout = async () => {
     if (user?.isGuest) {
       localStorage.removeItem("procastify_session");
@@ -165,9 +142,15 @@ const App: React.FC = () => {
     setView("routine");
   };
 
-  const handleNavigate = (newView: ViewState, folderId?: string | null) => {
+  const handleNavigate = (
+    newView: ViewState | "folders",
+    folderId?: string | null,
+  ) => {
     if (newView === "notes") {
       setActiveFolderId(folderId);
+    } else if (newView === "folders") {
+      // Folders view - accessible through Notes page button only
+      setActiveFolderId(undefined);
     } else {
       setActiveFolderId(undefined);
     }
@@ -183,14 +166,18 @@ const App: React.FC = () => {
 
     const timestamp = Date.now();
 
-    const newBlocks: any[] = [];
+    // --- Generate Blocks for Document Section ---
+    const newBlocks: any[] = []; // Use any to match Block[] structure without importing strict type locally if not needed, but we essentially conform to Block interface
 
+    // 1. Summary Header
     newBlocks.push({
       id: `${timestamp}-h1`,
       type: "h1",
       content: `Summary: ${new Date().toLocaleDateString()}`,
     });
 
+    // 2. Summary Text
+    // Convert newlines to breaks for HTML rendering in Block editor
     const formattedSummary = summary.summaryText.replace(/\n/g, "<br />");
     newBlocks.push({
       id: `${timestamp}-text`,
@@ -198,6 +185,7 @@ const App: React.FC = () => {
       content: formattedSummary,
     });
 
+    // 3. Flashcards Section
     if (flashcards.length > 0) {
       newBlocks.push({
         id: `${timestamp}-fc-h2`,
@@ -216,6 +204,7 @@ const App: React.FC = () => {
           type: "text",
           content: fc.back,
         });
+        // Add a small spacer/separator if needed, or just let them flow
         newBlocks.push({
           id: `${timestamp}-fc-${i}-d`,
           type: "text",
@@ -229,13 +218,14 @@ const App: React.FC = () => {
     let noteToSave: Note | null = null;
 
     if (noteId === null) {
+      // --- Create New Note ---
       const newNote: Note = {
         id: timestamp.toString(),
         userId: user.id,
         title: `Summary: ${new Date().toLocaleDateString()}`,
         document: { blocks: newBlocks },
-        canvas: { elements: [] },
-        elements: [],
+        canvas: { elements: [] }, // Empty canvas as requested (focus on Document)
+        elements: [], // Legacy
         tags: [],
         folder: "Summaries",
         folderId: null,
@@ -246,10 +236,12 @@ const App: React.FC = () => {
       noteToSave = newNote;
       noteWasCreated = true;
     } else {
+      // --- Update Existing Note ---
       updatedNotes = updatedNotes.map((n) => {
         if (n.id === noteId) {
           const existingBlocks = n.document?.blocks || [];
 
+          // Add visual separator block before appending new content
           const separatorBlock = {
             id: `${timestamp}-sep`,
             type: "text",
@@ -298,74 +290,22 @@ const App: React.FC = () => {
     );
   }
 
+  if (view === "auth") {
+    return (
+      <Auth
+        onLoginSuccess={() => setView("dashboard")}
+        onGuestAccess={handleGuestAccess}
+        onBack={user ? () => setView("dashboard") : () => setView("landing")}
+      />
+    );
+  }
+
   if (!user || view === "landing") {
     return (
-      <>
-        <Landing
-          onLogin={() => setShowLoginModal(true)}
-          onGuestAccess={handleGuestAccess}
-        />
-
-        {/* Login Modal */}
-        {showLoginModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="bg-[#1e1f22] p-8 rounded-2xl w-full max-w-md border border-white/10 shadow-2xl animate-in zoom-in-95">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-white">
-                  {isSignUp ? "Create Account" : "Welcome Back"}
-                </h2>
-                <button
-                  onClick={() => setShowLoginModal(false)}
-                  className="text-gray-400 hover:text-white"
-                >
-                  <X />
-                </button>
-              </div>
-
-              {authError && (
-                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg">
-                  {authError}
-                </div>
-              )}
-
-              <input
-                type="email"
-                className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#5865F2] mb-4"
-                placeholder="Email"
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-              />
-              <input
-                type="password"
-                className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#5865F2] mb-6"
-                placeholder="Password"
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-              />
-
-              <button
-                onClick={handleAuthSubmit}
-                disabled={!emailInput || !passwordInput}
-                className="w-full bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold py-3 rounded-xl transition-all disabled:opacity-50 mb-4"
-              >
-                {isSignUp ? "Sign Up" : "Sign In"}
-              </button>
-
-              <p className="text-center text-sm text-gray-400">
-                {isSignUp
-                  ? "Already have an account?"
-                  : "Don't have an account?"}
-                <button
-                  onClick={() => setIsSignUp(!isSignUp)}
-                  className="ml-2 text-[#5865F2] hover:underline font-bold"
-                >
-                  {isSignUp ? "Sign In" : "Sign Up"}
-                </button>
-              </p>
-            </div>
-          </div>
-        )}
-      </>
+      <Landing
+        onLogin={() => setView("auth")}
+        onGuestAccess={handleGuestAccess}
+      />
     );
   }
 
@@ -375,7 +315,7 @@ const App: React.FC = () => {
   return (
     <div className="flex min-h-screen bg-[#1e1f22]">
       <Sidebar
-        currentView={view}
+        currentView={view === "folders" ? "notes" : view}
         onNavigate={handleNavigate}
         onLogout={handleLogout}
         collapsed={sidebarCollapsed}
@@ -389,7 +329,7 @@ const App: React.FC = () => {
           <div className="bg-indigo-900/30 border-b border-indigo-500/20 px-4 py-1 text-xs text-indigo-200 flex justify-between items-center sticky top-0 z-50 backdrop-blur-md">
             <span>Guest Mode: Data saved to this device only.</span>
             <button
-              onClick={() => setShowLoginModal(true)}
+              onClick={() => setView("auth")}
               className="hover:text-white underline"
             >
               Sign up to sync
@@ -430,6 +370,7 @@ const App: React.FC = () => {
               StorageService.saveNotes(newNotes);
             }}
             onDeleteNote={async (noteId) => {
+              // strictly handle the flow: Service(Firestore/Storage) -> Local State
               await StorageService.deleteNote(noteId);
               setNotes((prev) => prev.filter((n) => n.id !== noteId));
               console.log("[DELETE] Removed from local React state:", noteId);
@@ -489,7 +430,7 @@ const App: React.FC = () => {
             user={user}
             onImportNote={(newNote) => {
               setNotes([newNote, ...notes]);
-              StorageService.saveNote(newNote);
+              StorageService.saveNote(newNote); // Ensure persistence immediately
               setView("notes");
             }}
             onNavigate={handleNavigate}
@@ -497,61 +438,7 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {showLoginModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-[#1e1f22] p-8 rounded-2xl w-full max-w-md border border-white/10 shadow-2xl animate-in zoom-in-95">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-white">Sync Account</h2>
-              <button
-                onClick={() => setShowLoginModal(false)}
-                className="text-gray-400 hover:text-white"
-              >
-                <X />
-              </button>
-            </div>
-
-            {authError && (
-              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg">
-                {authError}
-              </div>
-            )}
-
-            <p className="text-gray-400 mb-6">
-              Create an account to sync your current guest data to the cloud.
-            </p>
-            <input
-              type="email"
-              className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#5865F2] mb-4"
-              placeholder="Email"
-              value={emailInput}
-              onChange={(e) => setEmailInput(e.target.value)}
-            />
-            <input
-              type="password"
-              className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#5865F2] mb-6"
-              placeholder="Password"
-              value={passwordInput}
-              onChange={(e) => setPasswordInput(e.target.value)}
-            />
-            <button
-              onClick={handleAuthSubmit}
-              disabled={!emailInput || !passwordInput}
-              className="w-full bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold py-3 rounded-xl transition-all disabled:opacity-50"
-            >
-              {isSignUp ? "Sign Up & Sync" : "Sign In & Sync"}
-            </button>
-            <p className="text-center text-sm text-gray-400 mt-4">
-              {isSignUp ? "Already have an account?" : "Don't have an account?"}
-              <button
-                onClick={() => setIsSignUp(!isSignUp)}
-                className="ml-2 text-[#5865F2] hover:underline font-bold"
-              >
-                {isSignUp ? "Sign In" : "Sign Up"}
-              </button>
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Modal removed in favor of full Auth page */}
     </div>
   );
 };

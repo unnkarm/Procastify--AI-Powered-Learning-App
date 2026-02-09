@@ -24,7 +24,7 @@ interface NotesProps {
   setNotes: (notes: Note[]) => void;
   onDeleteNote: (id: string) => Promise<void>;
   user: UserPreferences;
-  onNavigate: (view: any) => void;
+  onNavigate: (view: any, folderId?: string | null) => void;
   activeFolderId?: string | null; // null = uncategorized, undefined = all notes
   folders?: Folder[];
 }
@@ -103,11 +103,17 @@ const Notes: React.FC<NotesProps> = ({
   const getDocumentContent = (note: Note) => {
     const blocks = note.document?.blocks;
     if (Array.isArray(blocks) && blocks.length > 0) {
+      // Check if it's the old Tiptap format or new Block format
+      // Tiptap blocks have "type" but not "id" usually at top level in the same way, or content array.
+      // New blocks have "id" and "content" string.
+      // If the first item has 'content' as string, it's likely new format.
+      // If 'content' is array, it's Tiptap.
       const first = blocks[0];
       if ((first as any).id && typeof (first as any).content === "string") {
-        return blocks as any;
+        return blocks as any; // It's our new Block[]
       }
     }
+    // Fallback for empty or legacy: Return empty array to let Editor initialize default
     return [];
   };
 
@@ -122,7 +128,7 @@ const Notes: React.FC<NotesProps> = ({
       lastModified: Date.now(),
       document: { blocks: [] },
       canvas: { elements: [] },
-      elements: [],
+      elements: [], // Legacy compat
       createdAt: Date.now(),
     };
     console.log("[Notes.tsx] createNote - Saving new note:", newNote);
@@ -141,6 +147,7 @@ const Notes: React.FC<NotesProps> = ({
     (newBlocks: any) => {
       if (!activeNote) return;
 
+      // Optimistic update to local state first
       setNotes((prevNotes) => {
         const noteIndex = prevNotes.findIndex((n) => n.id === activeNote.id);
         if (noteIndex === -1) return prevNotes;
@@ -205,8 +212,10 @@ const Notes: React.FC<NotesProps> = ({
       publishedAt: newStatus ? Date.now() : undefined,
     };
 
+    // Optimistic update
     setNotes(notes.map((n) => (n.id === activeNote.id ? updatedNote : n)));
 
+    // Persist
     if (newStatus) {
       await StorageService.publishNote(updatedNote);
     } else {
@@ -235,13 +244,17 @@ const Notes: React.FC<NotesProps> = ({
   });
 
   // Get active folder name for display
-  const activeFolderName =
-    activeFolderId === undefined
-      ? "All Notes"
-      : activeFolderId === null
-        ? "Uncategorized"
-        : folders.find((f) => f.id === activeFolderId)?.name ||
-          "Unknown Folder";
+  const getHeaderTitle = () => {
+    if (activeFolderId === undefined) {
+      return "My Notes";
+    } else if (activeFolderId === null) {
+      return "Uncategorized";
+    } else {
+      return (
+        folders.find((f) => f.id === activeFolderId)?.name || "Unknown Folder"
+      );
+    }
+  };
 
   if (!selectedNoteId) {
     return (
@@ -250,7 +263,7 @@ const Notes: React.FC<NotesProps> = ({
           <div>
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-3xl font-bold text-white">
-                {activeFolderName}
+                {getHeaderTitle()}
               </h1>
               {activeFolderId !== undefined && (
                 <button
@@ -330,8 +343,9 @@ const Notes: React.FC<NotesProps> = ({
                   </div>
                 )}
 
-                {/* Preview Area */}
+                {/* Preview Area - Simple representation */}
                 <div className="flex-1 bg-[#2b2d31] relative overflow-hidden">
+                  {/* Mini Canvas Preview */}
                   <div className="absolute inset-0 opacity-50 scale-50 origin-top-left w-[200%] h-[200%] pointer-events-none">
                     {elements.slice(0, 5).map((el, i) => (
                       <div

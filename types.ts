@@ -9,7 +9,7 @@ export type ViewState =
   | "quiz"
   | "feed"
   | "store"
-  | "folders"; // New view for folder management
+  | "auth";
 
 export interface UserPreferences {
   id: string;
@@ -96,7 +96,7 @@ export interface Folder {
   id: string;
   userId: string;
   name: string;
-  color?: string; // Optional color for visual distinction
+  color?: string;
   createdAt: number;
   updatedAt: number;
   noteCount?: number; // Computed field, not stored
@@ -116,7 +116,7 @@ export interface Note {
   elements?: NoteElement[];
 
   tags: string[];
-  folder: string; // Now references folder name (backward compatible)
+  folder: string;
   folderId?: string | null; // New: References Folder.id
   lastModified: number;
 

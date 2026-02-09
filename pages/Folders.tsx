@@ -18,7 +18,7 @@ interface FoldersProps {
   setFolders: (folders: Folder[]) => void;
   notes: Note[];
   user: UserPreferences;
-  onNavigate: (view: any, folderId?: string) => void;
+  onNavigate: (view: any, folderId?: string | null) => void;
 }
 
 const FOLDER_COLORS = [
@@ -202,7 +202,7 @@ const Folders: React.FC<FoldersProps> = ({
               />
               <button
                 onClick={createFolder}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
+                className="bg-discord-accent hover:bg-discord-accentHover text-white px-4 py-2 rounded-lg transition-colors"
               >
                 <Check size={20} />
               </button>
@@ -211,7 +211,7 @@ const Folders: React.FC<FoldersProps> = ({
                   setIsCreating(false);
                   setNewFolderName("");
                 }}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
+                className="bg-[#313338] hover:bg-[#3f4147] text-white px-4 py-2 rounded-lg transition-colors"
               >
                 <X size={20} />
               </button>
@@ -327,7 +327,7 @@ const Folders: React.FC<FoldersProps> = ({
                       e.stopPropagation();
                       saveEdit();
                     }}
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    className="flex-1 bg-discord-accent hover:bg-discord-accentHover text-white px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
                   >
                     <Check size={16} />
                     Save
@@ -337,7 +337,7 @@ const Folders: React.FC<FoldersProps> = ({
                       e.stopPropagation();
                       setEditingFolderId(null);
                     }}
-                    className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    className="flex-1 bg-[#313338] hover:bg-[#3f4147] text-white px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
                   >
                     <X size={16} />
                     Cancel
