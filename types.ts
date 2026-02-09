@@ -10,6 +10,7 @@ export type ViewState =
   | "feed"
   | "store"
   | "folders"; // New view for folder management
+export type ViewState = 'landing' | 'onboarding' | 'dashboard' | 'summarizer' | 'notes' | 'routine' | 'focus' | 'quiz' | 'feed' | 'store' | 'auth';
 
 export interface UserPreferences {
   id: string;

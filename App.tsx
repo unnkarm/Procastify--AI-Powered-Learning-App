@@ -75,6 +75,94 @@ const App: React.FC = () => {
             distractionLevel: "medium",
           };
           await StorageService.saveUserProfile(profile);
+import React, { useState, useEffect } from 'react';
+import { ViewState, UserPreferences, Summary, Note, RoutineTask, UserStats, Flashcard, NoteElement } from './types';
+import { StorageService } from './services/storageService';
+import { auth } from './firebaseConfig';
+import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import Sidebar from './components/Sidebar';
+import Landing from './pages/Landing';
+import Dashboard from './pages/Dashboard';
+import Summarizer from './pages/Summarizer';
+import Notes from './pages/Notes';
+import Routine from './pages/Routine';
+import Focus from './pages/Focus';
+import QuizPage from './pages/Quiz';
+import NoteFeed from './pages/NoteFeed';
+import NotesStore from './pages/NotesStore';
+import Auth from './pages/Auth';
+import { AlertCircle, LogIn, X, Loader2 } from 'lucide-react';
+
+const App: React.FC = () => {
+    const [view, setView] = useState<ViewState>('landing');
+    const [user, setUser] = useState<UserPreferences | null>(null);
+    const [loadingAuth, setLoadingAuth] = useState(true);
+    const [summaries, setSummaries] = useState<Summary[]>([]);
+    const [notes, setNotes] = useState<Note[]>([]);
+    const [stats, setStats] = useState<UserStats | null>(null);
+    const [focusTask, setFocusTask] = useState<RoutineTask | undefined>(undefined);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+    const deriveName = (email?: string | null) => {
+        if (!email) return 'User';
+        return email.split('@')[0];
+    };
+
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+            if (firebaseUser) {
+
+                let profile = await StorageService.getUserProfile(firebaseUser.uid);
+
+                if (!profile) {
+
+                    profile = {
+                        id: firebaseUser.uid,
+                        isGuest: false,
+                        name: firebaseUser.displayName || deriveName(firebaseUser.email),
+                        freeTimeHours: 2,
+                        energyPeak: 'morning',
+                        goal: 'Productivity',
+                        distractionLevel: 'medium'
+                    };
+                    await StorageService.saveUserProfile(profile);
+                }
+
+                StorageService.setSession(profile);
+                setUser(profile);
+                loadUserData();
+                setView('dashboard');
+            } else {
+
+                const guestUser = StorageService.getGuestSession();
+                if (guestUser) {
+                    StorageService.setSession(guestUser);
+                    setUser(guestUser);
+                    loadUserData();
+                    setView('dashboard');
+                } else {
+                    setUser(null);
+                    setView('landing');
+                }
+            }
+            setLoadingAuth(false);
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    const loadUserData = async () => {
+        try {
+            await StorageService.checkLoginStreak();
+            // Zero Migration: Removed migration check
+            const n = await StorageService.getNotes();
+            const s = await StorageService.getSummaries();
+            const st = await StorageService.getStats();
+            setNotes(n);
+            setSummaries(s);
+            setStats(st);
+        } catch (error) {
+            console.error('Error loading user data:', error);
         }
 
         StorageService.setSession(profile);
@@ -91,6 +179,23 @@ const App: React.FC = () => {
         } else {
           setUser(null);
           setView("landing");
+
+    const handleGuestAccess = () => {
+        const guestUser = StorageService.createGuestUser();
+        StorageService.saveUserProfile(guestUser);
+        StorageService.setSession(guestUser);
+        setUser(guestUser);
+        loadUserData();
+        setView('dashboard');
+    };
+
+    const handleLogout = async () => {
+        if (user?.isGuest) {
+            localStorage.removeItem('procastify_session');
+            setUser(null);
+            setView('landing');
+        } else {
+            await signOut(auth);
         }
       }
       setLoadingAuth(false);
@@ -287,6 +392,20 @@ const App: React.FC = () => {
       }));
       const updatedStats = await StorageService.getStats();
       setStats(updatedStats);
+    if (view === 'auth') {
+        return (
+            <Auth 
+                onLoginSuccess={() => setView('dashboard')} 
+                onGuestAccess={handleGuestAccess}
+                onBack={user ? () => setView('dashboard') : () => setView('landing')}
+            />
+        );
+    }
+
+    if (!user || view === 'landing') {
+        return (
+            <Landing onLogin={() => setView('auth')} onGuestAccess={handleGuestAccess} />
+        );
     }
   };
 
@@ -515,6 +634,98 @@ const App: React.FC = () => {
                 {authError}
               </div>
             )}
+        <div className="flex min-h-screen bg-[#1e1f22]">
+            <Sidebar
+                currentView={view}
+                onNavigate={setView}
+                onLogout={handleLogout}
+                collapsed={sidebarCollapsed}
+                onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+            />
+            <main className={`flex-1 ${sidebarCollapsed ? 'ml-20' : 'ml-64'} overflow-y-auto max-h-screen relative transition-all duration-300 ease-in-out`}>
+                {/* User Context Bar (Small) */}
+                {user.isGuest && (
+                    <div className="bg-indigo-900/30 border-b border-indigo-500/20 px-4 py-1 text-xs text-indigo-200 flex justify-between items-center sticky top-0 z-50 backdrop-blur-md">
+                        <span>Guest Mode: Data saved to this device only.</span>
+                        <button onClick={() => setView('auth')} className="hover:text-white underline">Sign up to sync</button>
+                    </div>
+                )}
+
+                {view === 'dashboard' && stats && <Dashboard user={user} summaries={summaries} notes={notes} stats={stats} onNoteClick={(noteId) => {
+
+                    setView('notes');
+                }} />}
+
+                {view === 'summarizer' && (
+                    <Summarizer
+                        onSave={async (s) => {
+                            const sWithUser = { ...s, userId: user.id };
+                            const newSums = [sWithUser, ...summaries];
+                            setSummaries(newSums);
+                            await StorageService.saveSummaries(newSums);
+                        }}
+                        notes={notes}
+                        onAddToNote={handleAddToNote}
+                    />
+                )}
+
+                {view === 'notes' && (
+                    <Notes
+                        notes={notes}
+                        setNotes={(newNotes) => {
+                            setNotes(newNotes);
+                            StorageService.saveNotes(newNotes);
+                        }}
+                        onDeleteNote={async (noteId) => {
+                            // strictly handle the flow: Service(Firestore/Storage) -> Local State
+                            await StorageService.deleteNote(noteId);
+                            setNotes(prev => prev.filter(n => n.id !== noteId));
+                            console.log("[DELETE] Removed from local React state:", noteId);
+                        }}
+                        user={user}
+                        onNavigate={setView}
+                    />
+                )}
+
+                {view === 'routine' && (
+                    <Routine
+                        user={user}
+                        setUser={async (u) => {
+                            await StorageService.saveUserProfile(u);
+                            setUser(u);
+                        }}
+                        notes={notes}
+                        setNotes={(n) => { setNotes(n); StorageService.saveNotes(n); }}
+                        onStartTask={handleStartFocus}
+                    />
+                )}
+
+
+                {view === 'quiz' && <QuizPage notes={notes} user={user} stats={stats} setStats={setStats} />}
+
+                {view === 'feed' && (
+                    <NoteFeed
+                        notes={notes}
+                        user={user}
+                        onClose={() => setView('dashboard')}
+                    />
+                )}
+
+                {view === 'store' && (
+                    <NotesStore
+                        user={user}
+                        onImportNote={(newNote) => {
+                            setNotes([newNote, ...notes]);
+                            StorageService.saveNote(newNote); // Ensure persistence immediately
+                            setView('notes');
+                        }}
+                        onNavigate={setView}
+                    />
+                )}
+            </main>
+
+
+            {/* Modal removed in favor of full Auth page */}
 
             <p className="text-gray-400 mb-6">
               Create an account to sync your current guest data to the cloud.
