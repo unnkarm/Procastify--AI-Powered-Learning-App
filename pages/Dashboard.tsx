@@ -1,7 +1,7 @@
 import React from 'react';
 import { UserPreferences, Summary, Note, UserStats } from '../types';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { Clock, BookOpen, FileText, Zap, Calendar, Flame, Trophy, ArrowRight, BrainCircuit } from 'lucide-react';
+import { BookOpen, FileText, Calendar, Flame, Trophy, ArrowRight, BrainCircuit } from 'lucide-react';
+import StudyActivityChart from '../components/StudyActivityChart';
 
 interface DashboardProps {
   user: UserPreferences;
@@ -37,26 +37,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, summaries, notes, stats, on
 
   const highScore = safeStats.highScore || 0;
 
-
   const actualNotesCreated = notes.length;
   const actualSummariesCount = summaries.length;
-
-
-  const getLast7Days = () => {
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const key = d.toISOString().split('T')[0];
-      days.push({
-        name: d.toLocaleDateString('en-US', { weekday: 'short' }),
-        hours: (safeStats.dailyActivity[key] || 0) / 60 // Convert minutes to hours
-      });
-    }
-    return days;
-  };
-
-  const activityData = getLast7Days();
 
   const statCards: StatCard[] = [
     {
@@ -142,61 +124,40 @@ const Dashboard: React.FC<DashboardProps> = ({ user, summaries, notes, stats, on
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Study Activity Chart - Full Width */}
+      <StudyActivityChart 
+        dailyActivity={safeStats.dailyActivity} 
+        loginStreak={safeStats.loginStreak}
+      />
 
-        <div className="lg:col-span-2 bg-app-panel p-6 rounded-2xl border border-app-border shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-app-text flex items-center gap-2">
-              <Zap size={18} className="text-app-accent" /> Study Activity (Hours)
-            </h3>
-          </div>
-          <div style={{ width: '100%', height: '256px', minWidth: 0 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={activityData}>
-                <XAxis dataKey="name" stroke="#949ba4" tickLine={false} axisLine={false} />
-                <YAxis stroke="#949ba4" tickLine={false} axisLine={false} allowDecimals={false} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#111214', border: '1px solid #2b2d31', borderRadius: '12px' }}
-                  itemStyle={{ color: '#dbdee1' }}
-                  cursor={{ fill: '#35373c' }}
-                />
-                <Bar dataKey="hours" fill="#5865F2" radius={[6, 6, 0, 0]} barSize={48} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-
-        <div className="bg-app-panel p-6 rounded-2xl border border-app-border shadow-sm flex flex-col">
-          <h3 className="text-lg font-bold text-app-text mb-4 flex items-center gap-2">
-            <BookOpen size={18} className="text-app-accent" /> Recent Notes
-          </h3>
-          <div className="space-y-2 overflow-y-auto flex-1 max-h-[300px] pr-2 custom-scrollbar">
-            {notes.slice(0, 5).map(note => (
-              <div
-                key={note.id}
-                onClick={() => onNoteClick?.(note.id)}
-                className="p-3 bg-app-bg rounded-lg border border-app-border hover:bg-app-hover hover:border-app-accent/30 transition-all cursor-pointer group">
-                <div className="flex items-start justify-between">
-                  <p className="text-sm font-medium text-app-text truncate flex-1 group-hover:text-app-accent transition-colors">
-                    {note.title.length > 50 ? note.title.substring(0, 50) + '…' : note.title}
-                  </p>
-                </div>
-                <div className="flex items-center justify-between mt-1.5">
-                  <span className="text-[9px] text-app-textMuted/70">{note.folder}</span>
-                  <span className="text-[9px] text-app-textMuted">
-                    {new Date(note.lastModified).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </span>
-                </div>
+      {/* Recent Notes - Full Width Below Chart */}
+      <div className="bg-app-panel p-6 rounded-2xl border border-app-border shadow-sm">
+        <h3 className="text-lg font-bold text-app-text mb-4 flex items-center gap-2">
+          <BookOpen size={18} className="text-app-accent" /> Recent Notes
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+          {notes.slice(0, 5).map(note => (
+            <div
+              key={note.id}
+              onClick={() => onNoteClick?.(note.id)}
+              className="p-4 bg-app-bg rounded-xl border border-app-border hover:bg-app-hover hover:border-app-accent/30 transition-all cursor-pointer group">
+              <p className="text-sm font-medium text-app-text truncate group-hover:text-app-accent transition-colors">
+                {note.title.length > 40 ? note.title.substring(0, 40) + '…' : note.title}
+              </p>
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-[10px] text-app-textMuted/70 bg-app-panel px-2 py-0.5 rounded">{note.folder}</span>
+                <span className="text-[10px] text-app-textMuted">
+                  {new Date(note.lastModified).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </span>
               </div>
-            ))}
-            {notes.length === 0 && (
-              <div className="text-center py-8">
-                <BookOpen size={28} className="mx-auto mb-2 text-discord-textMuted/40" />
-                <p className="text-xs text-discord-textMuted">Start creating notes to see them here</p>
-              </div>
-            )}
-          </div>
+            </div>
+          ))}
+          {notes.length === 0 && (
+            <div className="col-span-full text-center py-8">
+              <BookOpen size={28} className="mx-auto mb-2 text-app-textMuted/40" />
+              <p className="text-sm text-app-textMuted">Start creating notes to see them here</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
