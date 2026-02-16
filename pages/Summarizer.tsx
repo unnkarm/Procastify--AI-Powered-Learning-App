@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { summarizeContent, generateFlashcards, generateSpeech, playAudioBlob } from '../services/geminiService';
 import { Summary, Flashcard, Note, Attachment, CustomMode } from '../types';
-import { Sparkles, Link as LinkIcon, Mic, FileUp, Volume2, Plus, X, Paperclip, CheckCircle, FilePlus, BookOpen, Edit3, Trash2, Save } from 'lucide-react';
+import { Sparkles, Link as LinkIcon, Mic, FileUp, Volume2, Plus, X, Paperclip, CheckCircle, FilePlus, BookOpen, Edit3, Trash2, Save, Clock } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { StorageService } from '../services/storageService';
+import HistoryModal from '../components/HistoryModal';
+import { determineType } from '../utils/summaryUtils';
 
 interface SummarizerProps {
     onSave: (summary: Summary) => void;
@@ -46,9 +48,14 @@ const Summarizer: React.FC<SummarizerProps> = ({ onSave, notes, onAddToNote }) =
     const audioChunksRef = useRef<Blob[]>([]);
     const timerRef = useRef<any>(null);
 
+    // History feature state
+    const [showHistoryModal, setShowHistoryModal] = useState(false);
+    const [summaryHistory, setSummaryHistory] = useState<Summary[]>([]);
+
     // Load custom modes on mount
     useEffect(() => {
         loadCustomModes();
+        loadSummaryHistory();
     }, []);
 
     const loadCustomModes = async () => {
@@ -60,9 +67,19 @@ const Summarizer: React.FC<SummarizerProps> = ({ onSave, notes, onAddToNote }) =
         }
     };
 
+    const loadSummaryHistory = async () => {
+        try {
+            const summaries = await StorageService.getSummaries();
+            setSummaryHistory(summaries);
+        } catch (error) {
+            console.error('Error loading summary history:', error);
+            setSummaryHistory([]);
+        }
+    };
+
     const saveCustomMode = async () => {
         if (!customModeText.trim() || !customModePrompt.trim()) return;
-        
+
         try {
             const newMode: CustomMode = {
                 id: editingCustomMode?.id || Date.now().toString(),
@@ -74,10 +91,10 @@ const Summarizer: React.FC<SummarizerProps> = ({ onSave, notes, onAddToNote }) =
 
             await StorageService.saveCustomMode(newMode);
             await loadCustomModes();
-            
+
             // Set the new mode as active
             setMode(newMode.name);
-            
+
             // Reset form
             setCustomModeText('');
             setCustomModePrompt('');
@@ -101,7 +118,7 @@ const Summarizer: React.FC<SummarizerProps> = ({ onSave, notes, onAddToNote }) =
         try {
             await StorageService.deleteCustomMode(modeId);
             await loadCustomModes();
-            
+
             // If the deleted mode was active, switch to short mode
             const deletedMode = customModes.find(m => m.id === modeId);
             if (deletedMode && mode === deletedMode.name) {
@@ -260,20 +277,34 @@ const Summarizer: React.FC<SummarizerProps> = ({ onSave, notes, onAddToNote }) =
         try {
             // Get custom prompt if using a custom mode
             const customPrompt = getCustomPromptForMode(mode);
-            
+
             // summarizeContent in geminiService handles the normalization via extractionService
             const summaryText = await summarizeContent(textContext, attachments, mode, customPrompt);
             setResult(summaryText);
 
             const newSummary: Summary = {
                 id: Date.now().toString(),
-                userId: '',
+                userId: StorageService.currentUserId || '',
                 originalSource: attachments.length > 0 ? `Multiple sources` : 'Text input',
                 summaryText,
-                type: 'mixed',
+                type: determineType(attachments),
                 mode,
-                createdAt: Date.now()
+                createdAt: Date.now(),
+                // Store complete session data for history
+                originalText: textContext,
+                attachments: attachments
             };
+
+            // Save to history
+            try {
+                const updated = [newSummary, ...summaryHistory];
+                await StorageService.saveSummaries(updated);
+                setSummaryHistory(updated);
+            } catch (saveError) {
+                console.error('Failed to save to history:', saveError);
+                // Continue - don't block summarization if history save fails
+            }
+
             onSave(newSummary);
         } catch (error) {
             console.error('Summarization failed:', error);
@@ -317,6 +348,40 @@ const Summarizer: React.FC<SummarizerProps> = ({ onSave, notes, onAddToNote }) =
         }, 2000);
     };
 
+    // History handlers
+    const handleLoadContent = (summary: Summary) => {
+        // Load original text
+        if (summary.originalText !== undefined) {
+            setTextContext(summary.originalText);
+        } else {
+            setTextContext('');
+        }
+
+        // Load attachments
+        if (summary.attachments !== undefined && Array.isArray(summary.attachments)) {
+            setAttachments([...summary.attachments]);
+        } else {
+            setAttachments([]);
+        }
+
+        // Load mode
+        setMode(summary.mode);
+
+        // Close modal
+        setShowHistoryModal(false);
+    };
+
+    const handleDeleteSummary = async (summaryId: string) => {
+        try {
+            await StorageService.deleteSummary(summaryId);
+            const updated = summaryHistory.filter(s => s.id !== summaryId);
+            setSummaryHistory(updated);
+        } catch (error) {
+            console.error('Failed to delete summary:', error);
+            alert('Failed to delete summary. Please try again.');
+        }
+    };
+
     const formatTime = (s: number) => {
         const mins = Math.floor(s / 60);
         const secs = s % 60;
@@ -358,6 +423,14 @@ const Summarizer: React.FC<SummarizerProps> = ({ onSave, notes, onAddToNote }) =
                         Enter text to summarize. Choose your summary style below.
                     </p>
                 </div>
+                <button
+                    onClick={() => setShowHistoryModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-discord-bg hover:bg-discord-hover border border-white/10 rounded-lg text-white transition-colors"
+                    title="View history"
+                >
+                    <Clock size={20} />
+                    <span className="font-medium">History</span>
+                </button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full min-h-0 flex-1">
@@ -464,9 +537,9 @@ const Summarizer: React.FC<SummarizerProps> = ({ onSave, notes, onAddToNote }) =
 
                         <div className="flex items-center gap-2 px-2 py-1">
                             <span className="text-xs font-bold text-discord-textMuted uppercase">Current Mode:</span>
-                            <span className={`px-2 py-1 border rounded text-xs font-bold capitalize ${customModes.find(m => m.name === mode) 
-                                    ? 'bg-purple-600/20 border-purple-600/50 text-purple-400'
-                                    : 'bg-discord-accent/20 border-discord-accent/50 text-discord-accent'
+                            <span className={`px-2 py-1 border rounded text-xs font-bold capitalize ${customModes.find(m => m.name === mode)
+                                ? 'bg-purple-600/20 border-purple-600/50 text-purple-400'
+                                : 'bg-discord-accent/20 border-discord-accent/50 text-discord-accent'
                                 }`}>
                                 {mode === 'eli5' ? 'ELI5' : mode}
                             </span>
@@ -703,13 +776,13 @@ const Summarizer: React.FC<SummarizerProps> = ({ onSave, notes, onAddToNote }) =
                             <h3 className="text-xl font-bold text-white">
                                 {editingCustomMode ? 'Edit Custom Mode' : 'Create Custom Mode'}
                             </h3>
-                            <button 
+                            <button
                                 onClick={() => {
                                     setShowCustomModeModal(false);
                                     setCustomModeText('');
                                     setCustomModePrompt('');
                                     setEditingCustomMode(null);
-                                }} 
+                                }}
                                 className="text-discord-textMuted hover:text-white"
                             >
                                 <X size={24} />
@@ -773,6 +846,16 @@ const Summarizer: React.FC<SummarizerProps> = ({ onSave, notes, onAddToNote }) =
                     </div>
                 </div>
             )}
+
+            {/* History Modal */}
+            <HistoryModal
+                isOpen={showHistoryModal}
+                onClose={() => setShowHistoryModal(false)}
+                summaries={summaryHistory}
+                onSelectSummary={() => { }}
+                onDeleteSummary={handleDeleteSummary}
+                onLoadContent={handleLoadContent}
+            />
         </div >
     );
 };
