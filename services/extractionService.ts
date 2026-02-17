@@ -1,6 +1,9 @@
 import { Attachment } from '../types';
 import * as pdfjsLib from 'pdfjs-dist';
 
+// Backend URL for server-side processing (optional)
+const BACKEND_URL = import.meta.env?.VITE_BACKEND_URL || process.env?.REACT_APP_BACKEND_URL || 'http://localhost:5000';
+
 // Configure PDF.js worker to use local bundled worker
 try {
   // Use locally served worker file
@@ -41,12 +44,12 @@ export const extractPDFText = async (pdfBase64: string): Promise<ExtractionResul
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
       const textContent = await page.getTextContent();
-      
+
       // Combine text items from the page
       const pageText = textContent.items
         .map((item: any) => item.str)
         .join(' ');
-      
+
       fullText += pageText + '\n\n';
     }
 
@@ -157,6 +160,37 @@ export const prepareTextForSummarization = async (
     combinedText: combinedText.trim(),
     failedExtractions
   };
+};
+
+/**
+ * Fetch content from a URL (YouTube, website, etc.)
+ */
+export const fetchURLContent = async (url: string): Promise<ExtractionResult> => {
+  try {
+    const response = await fetch(`${BACKEND_URL}/extract-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Backend returned ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.success && data.text) {
+      return { text: data.text, success: true };
+    } else {
+      return { text: '', success: false, error: data.error || 'Failed to extract content' };
+    }
+  } catch (error) {
+    console.warn('URL content extraction failed:', error);
+    return {
+      text: '',
+      success: false,
+      error: 'Backend not available. URL content extraction requires a backend server.'
+    };
+  }
 };
 
 // Legacy function - kept for backward compatibility but redirects to new implementation

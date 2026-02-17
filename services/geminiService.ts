@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { UserPreferences, RoutineTask, Question, Flashcard, Note, QueueItem, Attachment } from '../types';
+import { UserPreferences, RoutineTask, Question, Flashcard, Note, QueueItem, Attachment, QuizReport, QuizAIAnalysis } from '../types';
 import { apiRateLimiter, searchRateLimiter } from './rateLimiter';
 import { sanitizeContent, validateUserInput, validateJSON } from './validation';
 import { getSecureKey, initializeSecureKeys, hasSecureKey } from './secureKeyManager';
@@ -7,7 +7,7 @@ import logger, { APIError, getClientErrorMessage } from './securityLogger';
 
 // Initialize secure keys on module load
 initializeSecureKeys();
-import { UserPreferences, RoutineTask, Question, Flashcard, Note, QueueItem, Attachment, QuizReport } from '../types';
+
 
 const getAI = () => {
   const apiKey = getSecureKey('GEMINI_API_KEY');
@@ -110,7 +110,7 @@ export const summarizeContent = async (
     }
 
     let systemPrompt = "";
-    
+
     // If a custom prompt is provided, validate and use it
     if (sanitizedPrompt) {
       systemPrompt = sanitizedPrompt;
@@ -218,7 +218,7 @@ export const analyzeNoteWorkload = async (noteContent: string, userId?: string):
     });
 
     logger.log(`Note analysis completed`, 'API', 'INFO' as any, { userId });
-    return result;
+    return result as Note['aiAnalysis'];
   } catch (error: any) {
     logger.logAPIError('/analyzeNoteWorkload', error, userId);
 
@@ -739,7 +739,7 @@ export const generateQuizReport = async (
     isCorrect: boolean;
     difficulty?: 'easy' | 'medium' | 'hard';
   }>
-): Promise<QuizReport> => {
+): Promise<QuizAIAnalysis> => {
   const ai = getAI();
 
   const performanceSummary = attemptedQuestions.map((q, i) =>
@@ -789,17 +789,17 @@ Reflect these patterns in the suggestions.`
 
     if (!response || !response.text) throw new Error("No report generated");
 
-    const report = safeJSONParse<QuizReport>(response.text, {
+    const report = safeJSONParse<QuizAIAnalysis>(response.text, {
       overallAccuracy: accuracy,
       difficultyProgression: difficulties,
       strengths: ["Completed the quiz"],
       weaknesses: [],
       suggestions: ["Review the questions you missed."]
     });
-    
+
     // Ensure accuracy matches actual calculation if AI drifts
-    report.overallAccuracy = accuracy; 
-    
+    report.overallAccuracy = accuracy;
+
     return report;
 
   } catch (error) {
@@ -837,7 +837,7 @@ export const generateFillInTheBlanksQuiz = async (
     const response = await ai.models.generateContent({
       model: MODEL_TEXT,
       contents: [
-        { 
+        {
           text: `Create 5 fill-in-the-blank questions from the content below.
 ${conceptPrompt}
 
@@ -859,7 +859,7 @@ Example format:
   "explanation": "Paris is the capital and largest city of France."
 }
 
-CONTENT TO PROCESS:` 
+CONTENT TO PROCESS:`
         },
         { text: safeContent }
       ],
@@ -879,8 +879,8 @@ CONTENT TO PROCESS:`
                   type: Type.OBJECT,
                   properties: {
                     id: { type: Type.STRING },
-                    correctAnswers: { 
-                      type: Type.ARRAY, 
+                    correctAnswers: {
+                      type: Type.ARRAY,
                       items: { type: Type.STRING },
                       description: "Multiple acceptable answers including variations"
                     }
@@ -896,7 +896,7 @@ CONTENT TO PROCESS:`
     });
 
     if (!response || !response.text) return [];
-    
+
     const data = safeJSONParse<any[]>(response.text, []);
     return data.map((q, i) => ({
       ...q,
@@ -932,7 +932,7 @@ export const generateExplainQuiz = async (
     const response = await ai.models.generateContent({
       model: MODEL_TEXT,
       contents: [
-        { 
+        {
           text: `Create 5 multiple choice questions that require reasoning and explanation.
 ${conceptPrompt}
 
@@ -944,7 +944,7 @@ These questions should:
 
 Return JSON array with standard MCQ format.
 
-CONTENT TO PROCESS:` 
+CONTENT TO PROCESS:`
         },
         { text: safeContent }
       ],
@@ -957,8 +957,8 @@ CONTENT TO PROCESS:`
             properties: {
               id: { type: Type.STRING },
               text: { type: Type.STRING, description: "Question that requires reasoning" },
-              options: { 
-                type: Type.ARRAY, 
+              options: {
+                type: Type.ARRAY,
                 items: { type: Type.STRING },
                 description: "4 plausible options"
               },
@@ -972,7 +972,7 @@ CONTENT TO PROCESS:`
     });
 
     if (!response || !response.text) return [];
-    
+
     const data = safeJSONParse<any[]>(response.text, []);
     return data.map((q, i) => ({
       ...q,
@@ -1043,13 +1043,13 @@ Be encouraging but honest. Even if their answer is wrong, good reasoning should 
           properties: {
             score: { type: Type.INTEGER, description: "1-5 rating of reasoning quality" },
             feedback: { type: Type.STRING, description: "Overall assessment" },
-            strengths: { 
-              type: Type.ARRAY, 
+            strengths: {
+              type: Type.ARRAY,
               items: { type: Type.STRING },
               description: "What the student did well"
             },
-            improvements: { 
-              type: Type.ARRAY, 
+            improvements: {
+              type: Type.ARRAY,
               items: { type: Type.STRING },
               description: "Areas for improvement"
             }
@@ -1076,7 +1076,7 @@ Be encouraging but honest. Even if their answer is wrong, good reasoning should 
 
   } catch (error) {
     console.error("Reasoning Evaluation Error:", error);
-    
+
     // Fallback evaluation
     return {
       score: answerCorrect ? 3 : 2,

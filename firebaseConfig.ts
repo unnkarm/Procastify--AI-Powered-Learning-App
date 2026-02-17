@@ -1,12 +1,8 @@
 import { initializeApp, FirebaseApp } from "firebase/app";
 import { getAuth, Auth } from "firebase/auth";
-import { getFirestore, Firestore } from "firebase/firestore";
+import { getFirestore, Firestore, connectFirestoreEmulator } from "firebase/firestore";
+import { getStorage, FirebaseStorage, connectStorageEmulator } from "firebase/storage";
 import { getSecureKey } from "./services/secureKeyManager";
-import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
-import { getStorage, connectStorageEmulator } from "firebase/storage";
-
 
 const getEnv = (key: string) => {
     if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
@@ -17,7 +13,6 @@ const getEnv = (key: string) => {
     }
     return undefined;
 };
-
 
 const firebaseConfig = {
     apiKey: getSecureKey('FIREBASE_API_KEY') || getEnv('FIREBASE_API_KEY'),
@@ -35,19 +30,36 @@ export const isFirebaseConfigured = (): boolean => {
         firebaseConfig.apiKey !== 'AIzaSy_DUMMY_KEY_FOR_DEV_MODE' &&
         firebaseConfig.authDomain &&
         firebaseConfig.projectId &&
-        firebaseConfig.apiKey.length > 20 // Basic validation
+        firebaseConfig.apiKey.length > 20
     );
 };
 
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
+let storage: FirebaseStorage | null = null;
 
 if (isFirebaseConfigured()) {
     try {
         app = initializeApp(firebaseConfig);
         auth = getAuth(app);
         db = getFirestore(app);
+        storage = getStorage(app);
+
+        // Connect to Firebase Emulators in development (optional)
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+            const useEmulators = getEnv('USE_EMULATORS') === 'true';
+            if (useEmulators) {
+                try {
+                    console.log('🔧 Connecting to Firebase Emulators...');
+                    connectFirestoreEmulator(db, 'localhost', 8080);
+                    connectStorageEmulator(storage, 'localhost', 9199);
+                    console.log('✅ Connected to Firebase Emulators');
+                } catch (error: any) {
+                    console.warn('⚠️ Could not connect to emulators:', error.message);
+                }
+            }
+        }
     } catch (error) {
         console.error('Failed to initialize Firebase:', error);
     }
@@ -57,28 +69,4 @@ if (isFirebaseConfigured()) {
     console.warn("See SETUP.md for instructions.");
 }
 
-export { app, auth, db };
-export const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
-
-// Connect to Firebase Emulators in development (optional)
-if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    try {
-        // Check if we should use emulators (set USE_EMULATORS=true in .env to enable)
-        const useEmulators = getEnv('USE_EMULATORS') === 'true';
-        
-        if (useEmulators) {
-            console.log('🔧 Connecting to Firebase Emulators...');
-            connectFirestoreEmulator(db, 'localhost', 8080);
-            connectStorageEmulator(storage, 'localhost', 9199);
-            console.log('✅ Connected to Firebase Emulators (Firestore: 8080, Storage: 9199)');
-        } else {
-            console.log('📡 Using Production Firebase (set USE_EMULATORS=true in .env to use emulators)');
-        }
-    } catch (error: any) {
-        // Silently fail if emulators are not running - use production instead
-        console.warn('⚠️ Could not connect to emulators, using production Firebase:', error.message);
-    }
-}
+export { app, auth, db, storage };

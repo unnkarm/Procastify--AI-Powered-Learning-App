@@ -69,7 +69,7 @@ const QuizPage: React.FC<QuizProps> = ({ notes, user, stats, setStats }) => {
         explanation: string;
     }
     const [attemptedSwipeQuestions, setAttemptedSwipeQuestions] = useState<AttemptedSwipeQuestion[]>([]);
-    
+
     // New modes attempted questions
     const [attemptedFillQuestions, setAttemptedFillQuestions] = useState<AttemptedFillQuestion[]>([]);
     const [attemptedExplainQuestions, setAttemptedExplainQuestions] = useState<AttemptedExplainQuestion[]>([]);
@@ -184,7 +184,9 @@ const QuizPage: React.FC<QuizProps> = ({ notes, user, stats, setStats }) => {
             userId: user.id,
             title: 'Generated Quiz',
             questions,
-            highScore: 0
+            highScore: 0,
+            difficulty,
+            createdAt: Date.now()
         });
 
 
@@ -210,7 +212,7 @@ const QuizPage: React.FC<QuizProps> = ({ notes, user, stats, setStats }) => {
         try {
             setJoiningSession(true);
             const { FirebaseService } = await import('../services/firebaseService');
-            
+
             const session = await FirebaseService.getQuizSessionByCode(joinCode.trim().toUpperCase());
             if (!session) {
                 alert('Invalid quiz code or quiz already started');
@@ -238,7 +240,7 @@ const QuizPage: React.FC<QuizProps> = ({ notes, user, stats, setStats }) => {
             };
 
             await FirebaseService.joinQuizSession(session.id, participant);
-            
+
             const updatedSession = await FirebaseService.getQuizSession(session.id);
             setMultiplayerSession(updatedSession);
             setView('waiting');
@@ -299,11 +301,11 @@ const QuizPage: React.FC<QuizProps> = ({ notes, user, stats, setStats }) => {
 
     const handleContinueQuiz = async () => {
         setContinuing(true);
-        
+
         // 1. Analyze Performance of last round (last 5 questions)
         const lastRoundQuestions = attemptedQuestions.slice(-5);
         const correctCount = lastRoundQuestions.filter(q => q.isCorrect).length;
-        
+
         let newDifficulty = difficulty;
         if (correctCount >= 4) {
             if (difficulty === 'easy') newDifficulty = 'medium';
@@ -312,7 +314,7 @@ const QuizPage: React.FC<QuizProps> = ({ notes, user, stats, setStats }) => {
             if (difficulty === 'hard') newDifficulty = 'medium';
             else if (difficulty === 'medium') newDifficulty = 'easy';
         }
-        
+
         setDifficulty(newDifficulty); // Update state for UI
 
         // 2. Re-aggregate text (simplified for now)
@@ -330,7 +332,7 @@ const QuizPage: React.FC<QuizProps> = ({ notes, user, stats, setStats }) => {
 
         // 3. Generate New Questions
         const newQuestions = await generateQuizFromNotes(aggregatedText, newDifficulty);
-        
+
         if (newQuestions.length > 0 && quiz) {
             setQuiz(prev => prev ? ({
                 ...prev,
@@ -340,7 +342,7 @@ const QuizPage: React.FC<QuizProps> = ({ notes, user, stats, setStats }) => {
         } else {
             alert("Could not generate more questions for this content.");
         }
-        
+
         setContinuing(false);
     };
 
@@ -359,7 +361,7 @@ const QuizPage: React.FC<QuizProps> = ({ notes, user, stats, setStats }) => {
         // Multiplayer mode - generate leaderboard
         if (multiplayerSession) {
             const { FirebaseService } = await import('../services/firebaseService');
-            
+
             // Update session status to completed
             await FirebaseService.updateQuizSession(multiplayerSession.id, {
                 status: 'completed',
@@ -369,7 +371,7 @@ const QuizPage: React.FC<QuizProps> = ({ notes, user, stats, setStats }) => {
             // Generate leaderboard
             const generatedLeaderboard = await FirebaseService.generateLeaderboard(multiplayerSession.id);
             setLeaderboard(generatedLeaderboard);
-            
+
             setGeneratingReport(false);
             setView('leaderboard');
             return;
@@ -381,7 +383,19 @@ const QuizPage: React.FC<QuizProps> = ({ notes, user, stats, setStats }) => {
 
         // Generate AI Report
         if (attemptedQuestions.length > 0) {
-            const report = await generateQuizReport(attemptedQuestions);
+            const analysis = await generateQuizReport(attemptedQuestions);
+            const report: QuizReport = {
+                quizId: quiz?.id || Date.now().toString(),
+                userId: user.id,
+                score: resultScore,
+                totalQuestions: attemptedQuestions.length,
+                correctAnswers: attemptedQuestions.filter(q => q.isCorrect).length,
+                timeSpent: attemptedQuestions.length * QUESTION_TIMER, // Approximate
+                difficulty: difficulty,
+                completedAt: Date.now(),
+                answers: attemptedQuestions,
+                ...analysis
+            };
             setQuizReport(report);
         }
 
@@ -392,7 +406,7 @@ const QuizPage: React.FC<QuizProps> = ({ notes, user, stats, setStats }) => {
         }));
         setStats(updatedStats);
         if (finalScore !== undefined) setScore(finalScore); // Update local score for display
-        
+
         setGeneratingReport(false);
         setView('results');
     };
@@ -557,14 +571,12 @@ const QuizPage: React.FC<QuizProps> = ({ notes, user, stats, setStats }) => {
                                     <span className="text-white font-medium">Enable Timer</span>
                                     <div
                                         onClick={() => setTimerEnabled(!timerEnabled)}
-                                        className={`relative w-12 h-6 rounded-full transition-colors ${
-                                            timerEnabled ? 'bg-discord-accent' : 'bg-gray-600'
-                                        }`}
+                                        className={`relative w-12 h-6 rounded-full transition-colors ${timerEnabled ? 'bg-discord-accent' : 'bg-gray-600'
+                                            }`}
                                     >
                                         <div
-                                            className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                                                timerEnabled ? 'transform translate-x-6' : ''
-                                            }`}
+                                            className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${timerEnabled ? 'transform translate-x-6' : ''
+                                                }`}
                                         />
                                     </div>
                                 </label>
@@ -633,7 +645,7 @@ const QuizPage: React.FC<QuizProps> = ({ notes, user, stats, setStats }) => {
                         </div>
                     </div>
                 </div>
-                
+
                 {/* Mode Selection Modal */}
                 <ModeSelectionModal
                     isOpen={showModeModal}
@@ -659,7 +671,9 @@ const QuizPage: React.FC<QuizProps> = ({ notes, user, stats, setStats }) => {
                         userId: user.id,
                         title: multiplayerSession.title,
                         questions: multiplayerSession.questions,
-                        highScore: 0
+                        highScore: 0,
+                        difficulty: multiplayerSession.difficulty,
+                        createdAt: multiplayerSession.createdAt
                     });
                     setCurrentQIndex(0);
                     setScore(0);
@@ -891,10 +905,10 @@ const QuizPage: React.FC<QuizProps> = ({ notes, user, stats, setStats }) => {
         const isSwipeMode = mode === 'swipe';
         const isFillMode = mode === 'fillBlanks';
         const isExplainMode = mode === 'explain';
-        
+
         let totalQuestions = 0;
         let correctCount = 0;
-        
+
         if (isSwipeMode) {
             totalQuestions = attemptedSwipeQuestions.length;
             correctCount = attemptedSwipeQuestions.filter(q => q.isCorrect).length;
@@ -908,7 +922,7 @@ const QuizPage: React.FC<QuizProps> = ({ notes, user, stats, setStats }) => {
             totalQuestions = attemptedQuestions.length;
             correctCount = attemptedQuestions.filter(q => q.isCorrect).length;
         }
-        
+
         const accuracy = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
 
         return (

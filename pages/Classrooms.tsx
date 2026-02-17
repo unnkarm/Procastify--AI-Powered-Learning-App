@@ -1,16 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { UserPreferences } from '../types';
-import { ClassroomService } from '../services/classroomService';
-import { Classroom, VirtualClassLink } from '../types';
-import { GraduationCap, Plus, Users, Copy, Check, X, ExternalLink, Calendar, Edit2, Trash2, Video } from 'lucide-react';
-import VirtualClassLinks from '../components/VirtualClassLinks';
-
-interface ClassroomsProps {
-  user: UserPreferences;
-  onNavigate: (view: any) => void;
 import { UserPreferences, Classroom, ViewState } from '../types';
-import { StorageService } from '../services/storageService';
-import { GraduationCap, Plus, Users, X, Loader2, ArrowRight, Edit2, Trash2 } from 'lucide-react';
+import { ClassroomService } from '../services/classroomService';
+import { GraduationCap, Plus, Users, Copy, X, Loader2, ArrowRight, Trash2, Video } from 'lucide-react';
+import VirtualClassLinks from '../components/VirtualClassLinks';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface ClassroomsProps {
@@ -25,12 +17,12 @@ const Classrooms: React.FC<ClassroomsProps> = ({ user, onNavigate }) => {
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [selectedClassroom, setSelectedClassroom] = useState<Classroom | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'links' | 'announcements' | 'resources'>('overview');
-  
+
   // Create classroom form
   const [className, setClassName] = useState('');
   const [classDescription, setClassDescription] = useState('');
   const [creating, setCreating] = useState(false);
-  
+
   // Join classroom form
   const [inviteCode, setInviteCode] = useState('');
   const [joining, setJoining] = useState(false);
@@ -44,64 +36,23 @@ const Classrooms: React.FC<ClassroomsProps> = ({ user, onNavigate }) => {
   const loadClassrooms = async () => {
     setLoading(true);
     try {
-      // Check if user has a role
-      if (!user.role) {
-        console.warn('User does not have a role set');
+      if (!user.role || user.isGuest) {
         setClassrooms([]);
         setLoading(false);
         return;
       }
-
-      // Guest users can't use Firestore features - show message
-      if (user.isGuest) {
-        console.warn('Guest users cannot access classrooms. Please sign up to use this feature.');
-        setClassrooms([]);
-        setLoading(false);
-        return;
-      }
-
-      // Add timeout to prevent infinite loading
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 10000)
-      );
 
       let classroomsResult: Classroom[] = [];
-      
       if (user.role === 'teacher') {
-        classroomsResult = await Promise.race([
-          ClassroomService.getTeacherClassrooms(user.id),
-          timeoutPromise
-        ]) as Classroom[];
+        classroomsResult = await ClassroomService.getTeacherClassrooms(user.id);
       } else if (user.role === 'student') {
-        classroomsResult = await Promise.race([
-          ClassroomService.getStudentClassrooms(user.id),
-          timeoutPromise
-        ]) as Classroom[];
+        classroomsResult = await ClassroomService.getStudentClassrooms(user.id);
       }
-      
+
       setClassrooms(classroomsResult);
     } catch (error: any) {
       console.error('Error loading classrooms:', error);
       setClassrooms([]);
-      // Show error message if it's not just an empty result
-      if (error.message && error.message !== 'Request timeout') {
-        console.error('Detailed error:', error);
-      }
-  const [formData, setFormData] = useState({ name: '', description: '' });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    loadClassrooms();
-  }, [user.id]);
-
-  const loadClassrooms = async () => {
-    try {
-      setLoading(true);
-      const data = await StorageService.getClassrooms(user.id);
-      setClassrooms(data);
-    } catch (error) {
-      console.error('Error loading classrooms:', error);
     } finally {
       setLoading(false);
     }
@@ -110,10 +61,10 @@ const Classrooms: React.FC<ClassroomsProps> = ({ user, onNavigate }) => {
   const handleCreateClassroom = async () => {
     if (!className.trim()) return;
     if (user.isGuest) {
-      alert('Guest users cannot create classrooms. Please sign up first.');
+      alert('Guest users cannot create classrooms.');
       return;
     }
-    
+
     setCreating(true);
     try {
       const newClassroom = await ClassroomService.createClassroom(
@@ -136,7 +87,7 @@ const Classrooms: React.FC<ClassroomsProps> = ({ user, onNavigate }) => {
 
   const handleJoinClassroom = async () => {
     if (!inviteCode.trim()) return;
-    
+
     setJoining(true);
     setJoinError('');
     try {
@@ -158,7 +109,7 @@ const Classrooms: React.FC<ClassroomsProps> = ({ user, onNavigate }) => {
 
   const handleDeleteClassroom = async (classroomId: string) => {
     if (!confirm('Are you sure you want to delete this classroom? This action cannot be undone.')) return;
-    
+
     try {
       await ClassroomService.deleteClassroom(classroomId);
       setClassrooms(classrooms.filter(c => c.id !== classroomId));
@@ -171,64 +122,20 @@ const Classrooms: React.FC<ClassroomsProps> = ({ user, onNavigate }) => {
   };
 
   const createTestClassroom = async () => {
-    if (user.role !== 'teacher') return;
-    if (user.isGuest) {
-      alert('Guest users cannot create classrooms. Please sign up first.');
-      return;
-    }
-    
+    if (user.role !== 'teacher' || user.isGuest) return;
+
     setCreatingTest(true);
     try {
-      // Create test classroom
       const testClassroom = await ClassroomService.createClassroom(
         user.id,
         user.name,
-        'Test Mathematics 101',
-        'This is a test classroom for Mathematics 101. Join to test the classroom features including virtual class links, announcements, and resources.'
+        'Math 101 Test',
+        'A test classroom for feature verification.'
       );
-
-      // Add sample virtual links
-      const sampleLinks = [
-        {
-          title: 'Weekly Math Review Session',
-          url: 'https://zoom.us/j/1234567890',
-          description: 'Join us every Monday at 3 PM for a comprehensive review of the week\'s topics',
-          scheduledDate: Date.now() + (7 * 24 * 60 * 60 * 1000), // 7 days from now
-          createdBy: user.id
-        },
-        {
-          title: 'Office Hours - Google Meet',
-          url: 'https://meet.google.com/abc-defg-hij',
-          description: 'Drop-in office hours for questions and help',
-          scheduledDate: Date.now() + (2 * 24 * 60 * 60 * 1000), // 2 days from now
-          createdBy: user.id
-        },
-        {
-          title: 'Final Exam Review',
-          url: 'https://zoom.us/j/9876543210',
-          description: 'Comprehensive review session before the final exam',
-          scheduledDate: Date.now() + (14 * 24 * 60 * 60 * 1000), // 14 days from now
-          createdBy: user.id
-        }
-      ];
-
-      for (const linkData of sampleLinks) {
-        await ClassroomService.addVirtualLink(testClassroom.id, linkData);
-      }
-
-      // Reload classrooms
       await loadClassrooms();
-      
-      // Select the new classroom
-      const updated = await ClassroomService.getClassroom(testClassroom.id);
-      if (updated) {
-        setSelectedClassroom(updated);
-      }
-      
-      alert(`✅ Test classroom created!\n\nName: ${testClassroom.name}\nInvite Code: ${testClassroom.inviteCode}\n\n3 sample virtual links have been added.`);
+      alert(`Test classroom created! Invite Code: ${testClassroom.inviteCode}`);
     } catch (error) {
       console.error('Error creating test classroom:', error);
-      alert('Failed to create test classroom. Check console for details.');
     } finally {
       setCreatingTest(false);
     }
@@ -238,100 +145,29 @@ const Classrooms: React.FC<ClassroomsProps> = ({ user, onNavigate }) => {
     navigator.clipboard.writeText(code);
   };
 
-  // Show message if user doesn't have a role
-  if (!user.role) {
-    return (
-      <div className="min-h-screen bg-[#1e1f22] text-white p-6 flex items-center justify-center">
-        <div className="text-center max-w-md">
-          <GraduationCap className="mx-auto text-gray-600 mb-4" size={64} />
-          <h2 className="text-2xl font-bold mb-2">Role Not Set</h2>
-          <p className="text-gray-400 mb-4">
-            Please select your role (Teacher or Student) to access classrooms.
-          </p>
-          <p className="text-sm text-gray-500">
-            If you just signed up, please refresh the page or log out and log back in.
-          </p>
-        </div>
-  const handleCreateClassroom = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.name.trim()) {
-      setError('Classroom name is required');
-      return;
-    }
-
-    if (formData.name.length > 100) {
-      setError('Classroom name must be less than 100 characters');
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setError('');
-      
-      const newClassroom: Classroom = {
-        id: Date.now().toString(),
-        teacherId: user.id,
-        teacherName: user.name,
-        name: formData.name.trim(),
-        description: formData.description.trim(),
-        studentIds: [],
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      };
-
-      console.log('Creating classroom:', newClassroom);
-      await StorageService.saveClassroom(newClassroom);
-      console.log('Classroom saved, reloading list...');
-      await loadClassrooms();
-      console.log('Classrooms reloaded');
-      
-      setShowCreateModal(false);
-      setFormData({ name: '', description: '' });
-    } catch (error: any) {
-      console.error('Error creating classroom:', error);
-      setError(error.message || 'Failed to create classroom');
-      alert('Error: ' + (error.message || 'Failed to create classroom'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="p-8 flex items-center justify-center min-h-screen">
-        <Loader2 className="animate-spin text-[#5865F2]" size={32} />
-      </div>
-    );
-  }
-
-  // Show message for guest users
-  if (user.isGuest) {
-    return (
-      <div className="min-h-screen bg-[#1e1f22] text-white p-6 flex items-center justify-center">
-        <div className="text-center max-w-md">
-          <GraduationCap className="mx-auto text-gray-600 mb-4" size={64} />
-          <h2 className="text-2xl font-bold mb-2">Sign Up Required</h2>
-          <p className="text-gray-400 mb-4">
-            Classrooms feature requires an account. Guest mode data is stored locally only and cannot access cloud features like classrooms.
-          </p>
-          <button
-            onClick={() => onNavigate('dashboard')}
-            className="px-6 py-3 bg-[#5865F2] hover:bg-[#4752c4] rounded-xl font-medium"
-          >
-            Go to Dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-[#1e1f22] flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-white mb-2">Loading classrooms...</div>
-          <div className="text-gray-400 text-sm">This may take a few seconds</div>
+        <Loader2 className="animate-spin text-[#5865F2]" size={48} />
+      </div>
+    );
+  }
+
+  if (user.isGuest) {
+    return (
+      <div className="min-h-screen bg-[#1e1f22] text-white p-6 flex items-center justify-center">
+        <div className="text-center max-w-md bg-[#2b2d31] p-8 rounded-2xl border border-white/10 shadow-xl">
+          <GraduationCap className="mx-auto text-[#5865F2] mb-6" size={64} />
+          <h2 className="text-3xl font-bold mb-4 text-white">Cloud Account Required</h2>
+          <p className="text-gray-400 mb-8 leading-relaxed">
+            Classrooms is a cloud-powered feature. Please sign up or log in to collaborate with others.
+          </p>
+          <button
+            onClick={() => onNavigate('dashboard')}
+            className="w-full px-6 py-4 bg-[#5865F2] hover:bg-[#4752c4] rounded-xl font-bold transition-all transform hover:scale-105"
+          >
+            Back to Dashboard
+          </button>
         </div>
       </div>
     );
@@ -339,505 +175,380 @@ const Classrooms: React.FC<ClassroomsProps> = ({ user, onNavigate }) => {
 
   if (selectedClassroom) {
     return (
-      <div className="min-h-screen bg-[#1e1f22] text-white p-6">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="min-h-screen bg-[#1e1f22] text-white p-6"
+      >
         <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setSelectedClassroom(null)}
-                className="text-gray-400 hover:text-white"
+                className="p-2 hover:bg-white/10 rounded-full transition-colors"
               >
                 <X size={24} />
               </button>
-              <h1 className="text-3xl font-bold">{selectedClassroom.name}</h1>
+              <h1 className="text-3xl font-bold tracking-tight">{selectedClassroom.name}</h1>
             </div>
             {user.role === 'teacher' && selectedClassroom.teacherId === user.id && (
               <button
                 onClick={() => handleDeleteClassroom(selectedClassroom.id)}
-                className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors"
+                className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-all border border-red-500/20 flex items-center gap-2"
               >
-                <Trash2 size={18} className="inline mr-2" />
-                Delete Classroom
+                <Trash2 size={18} />
+                Delete
               </button>
             )}
           </div>
 
-          {/* Tabs */}
-          <div className="flex gap-2 mb-6 border-b border-white/10">
+          <div className="flex gap-1 mb-8 bg-[#2b2d31] p-1 rounded-xl w-fit">
             {(['overview', 'links', 'announcements', 'resources'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-6 py-3 font-medium transition-colors ${
-                  activeTab === tab
-                    ? 'text-[#5865F2] border-b-2 border-[#5865F2]'
-                    : 'text-gray-400 hover:text-white'
-                }`}
+                className={`px-6 py-2.5 rounded-lg font-medium transition-all ${activeTab === tab
+                    ? 'bg-[#5865F2] text-white shadow-lg'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  }`}
               >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
 
-          {/* Tab Content */}
-          {activeTab === 'overview' && (
-            <div className="space-y-6">
-              {selectedClassroom.description && (
-                <div className="bg-[#2b2d31] p-6 rounded-xl">
-                  <h2 className="text-xl font-bold mb-2">Description</h2>
-                  <p className="text-gray-300">{selectedClassroom.description}</p>
-                </div>
-              )}
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-[#2b2d31] p-6 rounded-xl">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Users className="text-[#5865F2]" size={24} />
-                    <h3 className="font-bold">Students</h3>
+          <AnimatePresence mode="wait">
+            {activeTab === 'overview' && (
+              <motion.div
+                key="overview"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="space-y-6"
+              >
+                {selectedClassroom.description && (
+                  <div className="bg-[#2b2d31] p-8 rounded-2xl border border-white/5 shadow-inner">
+                    <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">About this class</h2>
+                    <p className="text-gray-300 text-lg leading-relaxed">{selectedClassroom.description}</p>
                   </div>
-                  <p className="text-3xl font-bold">{selectedClassroom.studentIds.length}</p>
-                </div>
-                
-                <div className="bg-[#2b2d31] p-6 rounded-xl">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Video className="text-[#5865F2]" size={24} />
-                    <h3 className="font-bold">Class Links</h3>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-[#2b2d31] p-6 rounded-2xl border border-white/5">
+                    <div className="flex items-center justify-between mb-4">
+                      <Users className="text-[#5865F2]" size={32} />
+                      <span className="text-gray-500 text-sm font-medium">Active Students</span>
+                    </div>
+                    <p className="text-4xl font-bold text-white">{selectedClassroom.studentIds.length}</p>
                   </div>
-                  <p className="text-3xl font-bold">{selectedClassroom.virtualLinks.length}</p>
-                </div>
-                
-                <div className="bg-[#2b2d31] p-6 rounded-xl">
-                  <div className="flex items-center gap-3 mb-2">
-                    <GraduationCap className="text-[#5865F2]" size={24} />
-                    <h3 className="font-bold">Teacher</h3>
+
+                  <div className="bg-[#2b2d31] p-6 rounded-2xl border border-white/5">
+                    <div className="flex items-center justify-between mb-4">
+                      <Video className="text-[#5865F2]" size={32} />
+                      <span className="text-gray-500 text-sm font-medium">Virtual Content</span>
+                    </div>
+                    <p className="text-4xl font-bold text-white">{selectedClassroom.virtualLinks?.length || 0}</p>
                   </div>
-                  <p className="text-lg">{selectedClassroom.teacherName}</p>
+
+                  <div className="bg-[#2b2d31] p-6 rounded-2xl border border-white/5">
+                    <div className="flex items-center justify-between mb-4">
+                      <GraduationCap className="text-[#5865F2]" size={32} />
+                      <span className="text-gray-500 text-sm font-medium">Instructor</span>
+                    </div>
+                    <p className="text-xl font-bold text-white truncate">{selectedClassroom.teacherName}</p>
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
+              </motion.div>
+            )}
 
-          {activeTab === 'links' && (
-            <VirtualClassLinks
-              classroom={selectedClassroom}
-              user={user}
-              onUpdate={async () => {
-                const updated = await ClassroomService.getClassroom(selectedClassroom.id);
-                if (updated) setSelectedClassroom(updated);
-              }}
-            />
-          )}
+            {activeTab === 'links' && (
+              <motion.div
+                key="links"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+              >
+                <VirtualClassLinks
+                  classroom={selectedClassroom}
+                  user={user}
+                  onUpdate={async () => {
+                    const updated = await ClassroomService.getClassroom(selectedClassroom.id);
+                    if (updated) setSelectedClassroom(updated);
+                  }}
+                />
+              </motion.div>
+            )}
 
-          {activeTab === 'announcements' && (
-            <div className="bg-[#2b2d31] p-6 rounded-xl">
-              <p className="text-gray-400">Announcements feature coming soon...</p>
-            </div>
-          )}
-
-          {activeTab === 'resources' && (
-            <div className="bg-[#2b2d31] p-6 rounded-xl">
-              <p className="text-gray-400">Resources feature coming soon...</p>
-            </div>
-          )}
+            {(activeTab === 'announcements' || activeTab === 'resources') && (
+              <motion.div
+                key="empty"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="bg-[#2b2d31] p-12 rounded-2xl border border-white/5 text-center"
+              >
+                <div className="w-16 h-16 bg-[#5865F2]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Loader2 className="text-[#5865F2] opacity-50" size={32} />
+                </div>
+                <h3 className="text-xl font-bold mb-2">Coming Soon</h3>
+                <p className="text-gray-400">We're working hard to bring this feature to your classroom!</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#1e1f22] text-white p-6">
+    <div className="min-h-screen bg-[#1e1f22] text-white p-8">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
           <div>
-            <h1 className="text-4xl font-bold mb-2">Classrooms</h1>
-            <p className="text-gray-400">
-              {user.role === 'teacher' 
-                ? 'Create and manage your classrooms' 
-                : 'Join classrooms and access learning materials'}
+            <h1 className="text-5xl font-extrabold text-white tracking-tight mb-3">Classrooms</h1>
+            <p className="text-gray-400 text-lg">
+              {user.role === 'teacher'
+                ? 'Empower your teaching journey'
+                : 'Connect with your learning community'}
             </p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-4">
             {user.role === 'student' && (
               <button
                 onClick={() => setShowJoinModal(true)}
-                className="px-6 py-3 bg-[#5865F2] hover:bg-[#4752c4] rounded-xl font-medium transition-colors"
+                className="group relative px-8 py-4 bg-[#5865F2] hover:bg-[#4752c4] rounded-2xl font-bold transition-all shadow-xl shadow-[#5865F2]/20 overflow-hidden"
               >
-                Join Classroom
+                <span className="relative z-10 flex items-center gap-2">
+                  <Users size={20} />
+                  Join Classroom
+                </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
               </button>
             )}
-            {user.role === 'teacher' && !user.isGuest && (
+            {user.role === 'teacher' && (
               <>
                 <button
                   onClick={createTestClassroom}
                   disabled={creatingTest}
-                  className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-xl font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
-                  title="Create a test classroom with sample data"
+                  className="px-6 py-4 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 rounded-2xl font-bold transition-all disabled:opacity-50"
                 >
-                  {creatingTest ? 'Creating...' : '🧪 Create Test Classroom'}
+                  {creatingTest ? '...' : '🧪 Test Class'}
                 </button>
                 <button
                   onClick={() => setShowCreateModal(true)}
-                  className="px-6 py-3 bg-[#5865F2] hover:bg-[#4752c4] rounded-xl font-medium transition-colors flex items-center gap-2"
+                  className="px-8 py-4 bg-[#5865F2] hover:bg-[#4752c4] text-white rounded-2xl font-bold transition-all flex items-center gap-2 shadow-xl shadow-[#5865F2]/20"
                 >
-                  <Plus size={20} />
-                  Create Classroom
+                  <Plus size={24} />
+                  New Classroom
                 </button>
               </>
             )}
           </div>
-        </div>
+        </header>
 
-        {/* Classrooms Grid */}
         {classrooms.length === 0 ? (
-          <div className="text-center py-20">
-            <GraduationCap className="mx-auto text-gray-600 mb-4" size={64} />
-            <h2 className="text-2xl font-bold mb-2">No Classrooms Yet</h2>
-            <p className="text-gray-400 mb-6">
-              {user.role === 'teacher'
-                ? 'Create your first classroom to get started'
-                : 'Join a classroom using an invite code'}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="text-center py-24 bg-[#2b2d31]/50 rounded-[2.5rem] border border-white/5"
+          >
+            <div className="w-24 h-24 bg-[#5865F2]/10 rounded-full flex items-center justify-center mx-auto mb-8">
+              <GraduationCap className="text-[#5865F2]" size={48} />
+            </div>
+            <h2 className="text-3xl font-bold mb-4">Start Your Community</h2>
+            <p className="text-gray-400 text-lg mb-10 max-w-md mx-auto">
+              Collaborate and grow. {user.role === 'teacher' ? 'Create a space for your students.' : 'Join a classroom to begin.'}
             </p>
-            {user.role === 'teacher' && !user.isGuest ? (
+            {user.role === 'teacher' ? (
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="px-6 py-3 bg-[#5865F2] hover:bg-[#4752c4] rounded-xl font-medium"
+                className="px-10 py-4 bg-[#5865F2] hover:bg-[#4752c4] rounded-2xl font-bold transition-all shadow-lg"
               >
-                Create Classroom
+                Launch First Class
               </button>
-            ) : user.role === 'student' && !user.isGuest ? (
+            ) : (
               <button
                 onClick={() => setShowJoinModal(true)}
-                className="px-6 py-3 bg-[#5865F2] hover:bg-[#4752c4] rounded-xl font-medium"
+                className="px-10 py-4 bg-[#5865F2] hover:bg-[#4752c4] rounded-2xl font-bold transition-all shadow-lg"
               >
-                Join Classroom
+                Join with Code
               </button>
-            ) : null}
-          </div>
+            )}
+          </motion.div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {classrooms.map(classroom => (
-              <div
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {classrooms.map((classroom, index) => (
+              <motion.div
                 key={classroom.id}
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
                 onClick={() => setSelectedClassroom(classroom)}
-                className="bg-[#2b2d31] p-6 rounded-xl cursor-pointer hover:bg-[#36393f] transition-colors border border-white/5"
+                className="group bg-[#2b2d31] p-8 rounded-3xl cursor-pointer hover:bg-[#313338] transition-all border border-white/5 hover:border-[#5865F2]/40 shadow-xl"
               >
-                <h3 className="text-xl font-bold mb-2">{classroom.name}</h3>
+                <div className="flex justify-between items-start mb-6">
+                  <div className="p-3 bg-white/5 rounded-2xl group-hover:bg-[#5865F2]/10 transition-colors">
+                    <GraduationCap size={32} className="text-[#5865F2]" />
+                  </div>
+                  <ArrowRight size={24} className="text-gray-600 group-hover:text-white transition-all transform group-hover:translate-x-1" />
+                </div>
+                <h3 className="text-2xl font-bold mb-3">{classroom.name}</h3>
                 {classroom.description && (
-                  <p className="text-gray-400 text-sm mb-4 line-clamp-2">{classroom.description}</p>
+                  <p className="text-gray-400 text-sm mb-6 line-clamp-2 leading-relaxed">{classroom.description}</p>
                 )}
-                <div className="flex items-center justify-between text-sm text-gray-400">
-                  <div className="flex items-center gap-4">
-                    <span className="flex items-center gap-1">
-                      <Users size={16} />
-                      {classroom.studentIds.length} students
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Video size={16} />
-                      {classroom.virtualLinks.length} links
-                    </span>
+                <div className="flex items-center gap-6 mt-auto">
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
+                    <Users size={18} className="text-[#5865F2]" />
+                    {classroom.studentIds.length}
+                  </div>
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
+                    <Video size={18} className="text-[#5865F2]" />
+                    {classroom.virtualLinks?.length || 0}
                   </div>
                 </div>
+
                 {user.role === 'teacher' && classroom.teacherId === user.id && (
-                  <div className="mt-4 pt-4 border-t border-white/10">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-400">Invite Code:</span>
-                      <div className="flex items-center gap-2">
-                        <code className="text-sm font-mono bg-black/30 px-2 py-1 rounded">
-                          {classroom.inviteCode}
-                        </code>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            copyInviteCode(classroom.inviteCode);
-                          }}
-                          className="text-gray-400 hover:text-white"
-                          title="Copy invite code"
-                        >
-                          <Copy size={16} />
-                        </button>
-                      </div>
+                  <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Invite Code</span>
+                    <div className="flex items-center gap-3">
+                      <code className="text-sm font-bold font-mono bg-[#1e1f22] px-3 py-1.5 rounded-lg border border-white/5 text-[#5865F2]">
+                        {classroom.inviteCode}
+                      </code>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          copyInviteCode(classroom.inviteCode);
+                        }}
+                        className="p-2 hover:bg-white/5 rounded-lg transition-colors text-gray-500 hover:text-white"
+                      >
+                        <Copy size={16} />
+                      </button>
                     </div>
                   </div>
                 )}
-              </div>
+              </motion.div>
             ))}
           </div>
         )}
 
-        {/* Create Classroom Modal */}
-        {showCreateModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="bg-[#2b2d31] p-8 rounded-2xl w-full max-w-md border border-white/10">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">Create Classroom</h2>
-                <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-white">
-                  <X size={24} />
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Classroom Name *</label>
-                  <input
-                    type="text"
-                    value={className}
-                    onChange={(e) => setClassName(e.target.value)}
-                    className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#5865F2]"
-                    placeholder="e.g., Math 101"
-                  />
+        {/* Modals with AnimatePresence */}
+        <AnimatePresence>
+          {showCreateModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/80 backdrop-blur-md"
+                onClick={() => setShowCreateModal(false)}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="relative bg-[#2b2d31] p-10 rounded-[2rem] w-full max-w-lg border border-white/10 shadow-2xl"
+              >
+                <div className="flex justify-between items-center mb-8">
+                  <h2 className="text-3xl font-bold">New Classroom</h2>
+                  <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-white p-2">
+                    <X size={28} />
+                  </button>
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Description (Optional)</label>
-                  <textarea
-                    value={classDescription}
-                    onChange={(e) => setClassDescription(e.target.value)}
-                    className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#5865F2] resize-none"
-                    placeholder="Brief description of the classroom"
-                    rows={3}
-                  />
-                </div>
-                
-                <button
-                  onClick={handleCreateClassroom}
-                  disabled={!className.trim() || creating}
-                  className="w-full bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold py-3 rounded-xl transition-all disabled:opacity-50"
-                >
-                  {creating ? 'Creating...' : 'Create Classroom'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
-        {/* Join Classroom Modal */}
-        {showJoinModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="bg-[#2b2d31] p-8 rounded-2xl w-full max-w-md border border-white/10">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">Join Classroom</h2>
-                <button onClick={() => setShowJoinModal(false)} className="text-gray-400 hover:text-white">
-                  <X size={24} />
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Invite Code</label>
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Class Name</label>
+                    <input
+                      type="text"
+                      autoFocus
+                      value={className}
+                      onChange={(e) => setClassName(e.target.value)}
+                      className="w-full bg-[#1e1f22] border border-white/5 rounded-2xl px-6 py-4 text-white focus:outline-none focus:border-[#5865F2] ring-0 transition-all text-lg placeholder:text-gray-600"
+                      placeholder="e.g., Computer Science 201"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Description</label>
+                    <textarea
+                      value={classDescription}
+                      onChange={(e) => setClassDescription(e.target.value)}
+                      className="w-full bg-[#1e1f22] border border-white/5 rounded-2xl px-6 py-4 text-white focus:outline-none focus:border-[#5865F2] resize-none h-32 placeholder:text-gray-600"
+                      placeholder="What will students learn here?"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleCreateClassroom}
+                    disabled={!className.trim() || creating}
+                    className="w-full h-16 bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold text-lg rounded-2xl transition-all shadow-xl shadow-[#5865F2]/20 disabled:opacity-50 mt-4"
+                  >
+                    {creating ? <Loader2 className="animate-spin mx-auto" /> : 'Create Classroom'}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+
+          {showJoinModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/80 backdrop-blur-md"
+                onClick={() => setShowJoinModal(false)}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="relative bg-[#2b2d31] p-10 rounded-[2.5rem] w-full max-w-md border border-white/10 shadow-2xl text-center"
+              >
+                <div className="flex justify-between items-center mb-8">
+                  <h2 className="text-3xl font-bold">Join Class</h2>
+                  <button onClick={() => setShowJoinModal(false)} className="text-gray-400 hover:text-white p-2">
+                    <X size={28} />
+                  </button>
+                </div>
+
+                <p className="text-gray-400 mb-8">Enter the 6-character code provided by your teacher.</p>
+
+                <div className="space-y-6">
                   <input
                     type="text"
+                    autoFocus
                     value={inviteCode}
                     onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                    className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#5865F2] font-mono text-center text-lg tracking-wider"
-                    placeholder="ABC123"
+                    className="w-full bg-[#1e1f22] border border-white/5 rounded-2xl px-6 py-5 text-white focus:outline-none focus:border-[#5865F2] font-mono text-center text-4xl font-bold tracking-[0.5em] placeholder:text-gray-700/50"
+                    placeholder="______"
                     maxLength={6}
                   />
+
+                  {joinError && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-xl font-medium"
+                    >
+                      {joinError}
+                    </motion.div>
+                  )}
+
+                  <button
+                    onClick={handleJoinClassroom}
+                    disabled={inviteCode.length < 6 || joining}
+                    className="w-full h-16 bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold text-xl rounded-2xl transition-all shadow-xl shadow-[#5865F2]/20 disabled:opacity-50"
+                  >
+                    {joining ? <Loader2 className="animate-spin mx-auto" /> : 'Join Now'}
+                  </button>
                 </div>
-                
-                {joinError && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg">
-                    {joinError}
-                  </div>
-                )}
-                
-                <button
-                  onClick={handleJoinClassroom}
-                  disabled={!inviteCode.trim() || joining}
-                  className="w-full bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold py-3 rounded-xl transition-all disabled:opacity-50"
-                >
-                  {joining ? 'Joining...' : 'Join Classroom'}
-                </button>
-              </div>
+              </motion.div>
             </div>
-          </div>
-        )}
+          )}
+        </AnimatePresence>
       </div>
-  return (
-    <div className="p-8 space-y-8 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-white flex items-center gap-2">
-            <GraduationCap size={32} />
-            My Classrooms
-          </h1>
-          <p className="text-gray-400 mt-1">
-            Manage your classrooms and invite students
-          </p>
-        </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="bg-[#5865F2] hover:bg-[#4752c4] text-white px-6 py-3 rounded-xl font-medium transition-all flex items-center gap-2 shadow-lg shadow-[#5865F2]/20"
-        >
-          <Plus size={20} />
-          Create Classroom
-        </button>
-      </div>
-
-      {/* Classrooms Grid */}
-      {classrooms.length === 0 ? (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="bg-[#2b2d31] border border-white/5 rounded-xl p-12 text-center"
-        >
-          <div className="w-20 h-20 bg-[#5865F2]/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <GraduationCap size={40} className="text-[#5865F2]" />
-          </div>
-          <h3 className="text-xl font-bold text-white mb-2">No Classrooms Yet</h3>
-          <p className="text-gray-400 mb-6 max-w-md mx-auto">
-            Create your first classroom to start inviting students and sharing resources
-          </p>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="bg-[#5865F2] hover:bg-[#4752c4] text-white px-6 py-3 rounded-xl font-medium transition-all inline-flex items-center gap-2"
-          >
-            <Plus size={20} />
-            Create Your First Classroom
-          </button>
-        </motion.div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {classrooms.map((classroom, index) => (
-            <motion.button
-              key={classroom.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-              onClick={() => onNavigate('classroomDetail', classroom.id)}
-              className="bg-[#2b2d31] border border-white/5 rounded-xl p-6 hover:border-[#5865F2]/50 hover:bg-[#2b2d31]/80 transition-all text-left group"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="w-12 h-12 bg-[#5865F2]/10 rounded-lg flex items-center justify-center">
-                  <GraduationCap size={24} className="text-[#5865F2]" />
-                </div>
-                <ArrowRight size={20} className="text-gray-500 group-hover:text-[#5865F2] transition-colors" />
-              </div>
-              <h3 className="text-lg font-bold text-white mb-2 line-clamp-1">
-                {classroom.name}
-              </h3>
-              <p className="text-gray-400 text-sm mb-4 line-clamp-2 min-h-[40px]">
-                {classroom.description || 'No description'}
-              </p>
-              <div className="flex items-center gap-4 text-xs text-gray-500">
-                <span className="flex items-center gap-1">
-                  <Users size={14} />
-                  {classroom.studentIds.length} students
-                </span>
-                <span>
-                  Updated {new Date(classroom.updatedAt).toLocaleDateString()}
-                </span>
-              </div>
-            </motion.button>
-          ))}
-        </div>
-      )}
-
-      {/* Create Classroom Modal */}
-      <AnimatePresence>
-        {showCreateModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={() => !saving && setShowCreateModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-[#2b2d31] rounded-xl p-8 max-w-md w-full border border-white/10"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-white">Create Classroom</h2>
-                <button
-                  onClick={() => !saving && setShowCreateModal(false)}
-                  disabled={saving}
-                  className="text-gray-400 hover:text-white transition-colors disabled:opacity-50"
-                >
-                  <X size={24} />
-                </button>
-              </div>
-
-              {error && (
-                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
-                  {error}
-                </div>
-              )}
-
-              <form onSubmit={handleCreateClassroom} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">
-                    Classroom Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g., Introduction to React"
-                    maxLength={100}
-                    className="w-full bg-[#1e1f22] border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#5865F2] transition-colors placeholder:text-gray-600"
-                    disabled={saving}
-                    required
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    {formData.name.length}/100 characters
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">
-                    Description (Optional)
-                  </label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Brief description of the classroom..."
-                    rows={4}
-                    className="w-full bg-[#1e1f22] border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#5865F2] transition-colors placeholder:text-gray-600 resize-none"
-                    disabled={saving}
-                  />
-                </div>
-
-                <div className="flex gap-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateModal(false)}
-                    disabled={saving}
-                    className="flex-1 bg-[#1e1f22] hover:bg-[#1e1f22]/80 text-white py-3 rounded-lg font-medium transition-colors disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={saving || !formData.name.trim()}
-                    className="flex-1 bg-[#5865F2] hover:bg-[#4752c4] text-white py-3 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {saving ? (
-                      <>
-                        <Loader2 className="animate-spin" size={20} />
-                        Creating...
-                      </>
-                    ) : (
-                      <>
-                        <Plus size={20} />
-                        Create
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };
 
 export default Classrooms;
-

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { UserPreferences, RoutineTask, Note, QueueItem } from '../types';
 import { analyzeNoteWorkload, generateAdaptiveRoutine, generatePanicDecomposition } from '../services/geminiService';
 import { StorageService } from '../services/storageService';
-import { Clock, CheckCircle, RefreshCw, CalendarCheck, PlayCircle, Plus, BrainCircuit, Settings, Coffee, Trash2, AlertTriangle, Zap } from 'lucide-react';
+import { Clock, CheckCircle, RefreshCw, CalendarCheck, PlayCircle, Plus, BrainCircuit, Settings, Coffee, Trash2, AlertTriangle, Zap, Kanban } from 'lucide-react';
+import { WorkflowBoard } from '../components/WorkflowBoard';
 
 interface RoutineProps {
     user: UserPreferences;
@@ -13,7 +14,7 @@ interface RoutineProps {
 }
 
 const Routine: React.FC<RoutineProps> = ({ user, setUser, notes, setNotes, onStartTask }) => {
-    const [activeTab, setActiveTab] = useState<'plan' | 'schedule'>('plan');
+    const [activeTab, setActiveTab] = useState<'plan' | 'schedule' | 'board'>('plan');
     const [queue, setQueue] = useState<QueueItem[]>([]);
     const [tasks, setTasks] = useState<RoutineTask[]>([]);
 
@@ -360,8 +361,7 @@ const Routine: React.FC<RoutineProps> = ({ user, setUser, notes, setNotes, onSta
                                 task.type === 'procastify' ? 'bg-discord-bg border-purple-400' :
                                     task.type === 'break' ? 'bg-discord-bg border-green-400' :
                                         panicMode ? 'bg-discord-bg border-red-400' :
-                                            'bg-discord-panel border-discord-accent'}
-                      `}>
+                                            'bg-discord-panel border-discord-accent'}`}>
                             {task.completed ? <CheckCircle size={20} className="text-discord-textMuted" /> :
                                 task.type === 'procastify' ? <Coffee size={20} className="text-purple-400" /> :
                                     task.type === 'break' ? <Coffee size={20} className="text-green-400" /> :
@@ -375,16 +375,14 @@ const Routine: React.FC<RoutineProps> = ({ user, setUser, notes, setNotes, onSta
                           ${task.type === 'procastify' ? 'bg-purple-500/5 border-purple-500/20' :
                                 task.type === 'break' ? 'bg-green-500/5 border-green-500/20' :
                                     panicMode ? 'bg-red-500/5 border-red-500/20' :
-                                        'bg-discord-panel border-white/5 hover:border-discord-accent/50'}
-                      `}>
+                                        'bg-discord-panel border-white/5 hover:border-discord-accent/50'}`}>
                             <div className="flex justify-between items-start mb-2">
                                 <div>
                                     <div className="flex items-center gap-2 mb-1">
                                         <span className={`text-xs font-bold uppercase tracking-wider
                                           ${task.type === 'procastify' ? 'text-purple-400' :
                                                 task.type === 'break' ? 'text-green-400' :
-                                                    panicMode ? 'text-red-400' : 'text-discord-accent'}
-                                      `}>
+                                                    panicMode ? 'text-red-400' : 'text-discord-accent'}`}>
                                             {task.type === 'procastify' ? 'Guilt-Free Break' : task.type}
                                         </span>
                                         <span className="text-xs text-discord-textMuted flex items-center gap-1">
@@ -396,8 +394,7 @@ const Routine: React.FC<RoutineProps> = ({ user, setUser, notes, setNotes, onSta
                                 <button
                                     onClick={() => updateTaskStatus(task.id)}
                                     className={`w-8 h-8 rounded-full border flex items-center justify-center hover:bg-white/10 transition-colors
-                                      ${task.completed ? 'bg-discord-accent border-discord-accent text-white' : 'border-white/20 text-white'}
-                                  `}
+                                      ${task.completed ? 'bg-discord-accent border-discord-accent text-white' : 'border-white/20 text-white'}`}
                                 >
                                     {task.completed && <CheckCircle size={16} />}
                                 </button>
@@ -485,6 +482,7 @@ const Routine: React.FC<RoutineProps> = ({ user, setUser, notes, setNotes, onSta
                 {[
                     { id: 'plan', label: '1. Plan & Queue', icon: BrainCircuit },
                     { id: 'schedule', label: '2. Today\'s Schedule', icon: CalendarCheck },
+                    { id: 'board', label: '3. Workflow Board', icon: Kanban },
                 ].map(tab => (
                     <button
                         key={tab.id}
@@ -492,8 +490,7 @@ const Routine: React.FC<RoutineProps> = ({ user, setUser, notes, setNotes, onSta
                         className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all
                     ${activeTab === tab.id
                                 ? 'bg-discord-accent text-white shadow-md'
-                                : 'text-discord-textMuted hover:bg-white/5 hover:text-white'}
-                `}
+                                : 'text-discord-textMuted hover:bg-white/5 hover:text-white'}`}
                     >
                         <tab.icon size={16} /> {tab.label}
                     </button>
@@ -504,6 +501,9 @@ const Routine: React.FC<RoutineProps> = ({ user, setUser, notes, setNotes, onSta
             <div className="flex-1">
                 {activeTab === 'plan' && renderQueue()}
                 {activeTab === 'schedule' && renderSchedule()}
+                {activeTab === 'board' && (
+                    <WorkflowBoard userId={user.id} onClose={() => setActiveTab('schedule')} />
+                )}
             </div>
         </div>
     );

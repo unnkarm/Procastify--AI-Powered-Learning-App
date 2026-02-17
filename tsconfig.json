@@ -11,9 +11,11 @@
     ],
     "skipLibCheck": true,
     "types": [
-      "node"
+      "node",
+      "vite/client"
     ],
-    "moduleResolution": "bundler",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
     "isolatedModules": true,
     "moduleDetection": "force",
     "allowJs": true,
@@ -25,5 +27,10 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": [
+    "SECURITY_EXAMPLES.ts",
+    "SECURITY_PATTERNS.ts",
+    "node_modules"
+  ]
 }

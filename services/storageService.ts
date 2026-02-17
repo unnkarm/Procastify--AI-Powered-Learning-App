@@ -76,60 +76,6 @@ export const StorageService = {
 
 
 
-    setSession: (user: UserPreferences) => {
-        currentUserId = user.id;
-        isGuestMode = user.isGuest;
-        if (user.isGuest) {
-            localStorage.setItem(LOCAL_KEYS.USER_SESSION, user.id);
-
-            const users = JSON.parse(localStorage.getItem(LOCAL_KEYS.USERS_DB) || '{}');
-            users[user.id] = user;
-            localStorage.setItem(LOCAL_KEYS.USERS_DB, JSON.stringify(users));
-        } else {
-            localStorage.removeItem(LOCAL_KEYS.USER_SESSION);
-        }
-    },
-
-    getGuestSession: (): UserPreferences | null => {
-        const sessionId = localStorage.getItem(LOCAL_KEYS.USER_SESSION);
-        if (sessionId) {
-            const users = JSON.parse(localStorage.getItem(LOCAL_KEYS.USERS_DB) || '{}');
-            return users[sessionId] || null;
-        }
-        return null;
-    },
-
-    createGuestUser: (): UserPreferences => {
-        const timestamp = Date.now();
-        const shortId = timestamp.toString().slice(-4);
-        const guestId = `guest_${timestamp}_${Math.random().toString(36).substr(2, 9)}`;
-
-        return {
-            id: guestId,
-            isGuest: true,
-            name: `Guest #${shortId}`,
-            role: 'student', // Guest users default to student role
-            freeTimeHours: 2,
-            energyPeak: 'morning',
-            goal: 'Productivity',
-            distractionLevel: 'medium'
-        };
-    },
-
-
-
-    getUserProfile: async (userId: string): Promise<UserPreferences | null> => {
-
-        try {
-            const docRef = doc(db, 'users', userId);
-            const snap = await getDoc(docRef);
-            if (snap.exists()) {
-                return snap.data() as UserPreferences;
-            }
-            return null;
-        } catch (e) {
-            console.error("Error fetching profile", e);
-            return null;
   get currentUserId() {
     return currentUserId;
   },
@@ -569,7 +515,7 @@ export const StorageService = {
       const filtered = folders.filter((f) => f.id !== folderId);
       saveLocalUserItems(LOCAL_KEYS.FOLDERS, currentUserId, filtered);
     } else {
-      await FirebaseService.deleteFolder(currentUserId, folderId);
+      await FirebaseService.deleteFolder(folderId);
     }
   },
 
@@ -837,6 +783,7 @@ export const StorageService = {
           // Log activity for invitation acceptance
           const studentProfile = await StorageService.getUserProfile(studentId);
           await FirebaseService.logActivity({
+            id: `${invitation.classroomId}_${Date.now()}_${studentId}`,
             classroomId: invitation.classroomId,
             classroomName: invitation.classroomName,
             type: 'student_accepted_invitation',
@@ -868,7 +815,7 @@ export const StorageService = {
     if (!currentUserId || isGuestMode) {
       throw new Error("Guest users cannot create announcements");
     }
-    await FirebaseService.saveAnnouncement(announcement.classroomId, announcement);
+    await FirebaseService.saveAnnouncement(announcement);
   },
 
   deleteAnnouncement: async (classroomId: string, announcementId: string): Promise<void> => {
@@ -979,7 +926,7 @@ export const StorageService = {
     } else {
       const colRef = collection(db, "users", currentUserId, collectionName);
       const snap = await getDocs(colRef);
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T);
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as unknown as T);
     }
   },
 };

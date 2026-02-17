@@ -1,6 +1,3 @@
-export type ViewState = 'landing' | 'onboarding' | 'dashboard' | 'summarizer' | 'notes' | 'routine' | 'focus' | 'quiz' | 'feed' | 'store' | 'classrooms';
-
-export type UserRole = 'student' | 'teacher';
 export type ViewState =
   | "landing"
   | "onboarding"
@@ -17,25 +14,22 @@ export type ViewState =
   | "classrooms"
   | "classroomDetail"
   | "studentClassrooms"
-  | "studentClassroomView";
+  | "studentClassroomView"
+  | "folders";
 
+export type UserRole = 'student' | 'teacher';
 
 export interface UserPreferences {
   id: string;
   isGuest: boolean;
   name: string;
-  role?: UserRole; // Added role field - undefined means not set yet
+  role?: UserRole;
   freeTimeHours: number;
   energyPeak: 'morning' | 'afternoon' | 'night';
   goal: string;
   distractionLevel: 'low' | 'medium' | 'high';
-  email?: string; // NEW: Store user email
-  avatarUrl?: string; // NEW: Store user avatar URL
-  role?: UserRole;
-  freeTimeHours?: number;
-  energyPeak?: "morning" | "afternoon" | "night";
-  goal?: string;
-  distractionLevel?: "low" | "medium" | "high";
+  email?: string;
+  avatarUrl?: string;
   classroomIds?: string[];
   teacherPreferences?: {
     notificationsEnabled: boolean;
@@ -74,10 +68,8 @@ export interface NoteElement {
   src?: string;
   color?: string;
   fontSize?: "small" | "medium" | "large";
-
   startId?: string;
   endId?: string;
-
   zIndex: number;
 }
 
@@ -98,22 +90,20 @@ export interface Block {
   type: BlockType;
   content: string;
   isChecked?: boolean;
-  // Rich content fields (optional for backward compatibility)
-  imageUrl?: string; // Base64 data URL for image blocks
-  linkUrl?: string; // URL for link blocks
-  language?: string; // Programming language for code blocks
+  imageUrl?: string;
+  linkUrl?: string;
+  language?: string;
 }
 
 export interface NoteDocument {
-  blocks: Block[]; // Updated to use Block interface
+  blocks: Block[];
 }
 
 export interface NoteCanvas {
-  elements: NoteElement[]; // Replaces top-level elements
-  strokes?: any[]; // For future drawing support
+  elements: NoteElement[];
+  strokes?: any[];
 }
 
-// New Folder interface
 export interface Folder {
   id: string;
   userId: string;
@@ -121,35 +111,26 @@ export interface Folder {
   color?: string;
   createdAt: number;
   updatedAt: number;
-  noteCount?: number; // Computed field, not stored
+  noteCount?: number;
 }
 
 export interface Note {
   id: string;
   userId: string;
-  ownerId?: string; // Firebase owner
+  ownerId?: string;
   title: string;
-
-  // Dual-section architecture
   document?: NoteDocument;
   canvas?: NoteCanvas;
-
-  // Legacy support (to be migrated)
   elements?: NoteElement[];
-
   tags: string[];
   folder: string;
-  folderId?: string | null; // New: References Folder.id
+  folderId?: string | null;
   lastModified: number;
-
-  // Persistence
   createdAt?: number | any;
   updatedAt?: number | any;
-
-  isPublic?: boolean; // For community store
+  isPublic?: boolean;
   publishedAt?: number | any;
   likes?: number;
-
   aiAnalysis?: {
     difficulty: "easy" | "medium" | "hard";
     estimatedMinutes: number;
@@ -196,22 +177,14 @@ export interface Summary {
   originalSource: string;
   summaryText: string;
   type: "text" | "video" | "article" | "pdf" | "audio" | "mixed";
-  mode: string; // Now supports any string (preset modes or custom mode names)
+  mode: string;
   createdAt: number;
   flashcards?: Flashcard[];
-  // Extended fields for history feature
-  originalText?: string;        // Full original text input
-  attachments?: Attachment[];   // All attachments from session
+  originalText?: string;
+  attachments?: Attachment[];
 }
 
-// Type alias for summaries with complete session data
-export type SummarySession = Required<Pick<Summary, 'originalText' | 'attachments'>> & Summary;
-
-// Type guard to check if a summary has complete session data
-export function isSummarySession(summary: Summary): summary is SummarySession {
-  return 'originalText' in summary && 'attachments' in summary && 
-         summary.originalText !== undefined && summary.attachments !== undefined;
-}
+export const isSummarySession = (summary: Summary) => summary.type === "text" || summary.type === "mixed";
 
 export interface RoutineTask {
   id: string;
@@ -225,7 +198,6 @@ export interface RoutineTask {
   confidence?: "high" | "medium" | "low";
 }
 
-// Quiz Mode Types
 export type QuizModeType = "standard" | "swipe" | "fillBlanks" | "explain";
 
 export interface Question {
@@ -235,107 +207,7 @@ export interface Question {
   correctIndex: number;
   explanation: string;
   difficulty?: "easy" | "medium" | "hard";
-  mode?: QuizModeType; // Optional for backward compatibility
-}
-
-// Fill in the Blanks specific types
-export interface FillInTheBlanksQuestion extends Omit<Question, 'options' | 'correctIndex'> {
-  mode: "fillBlanks";
-  textWithBlanks: string;
-  blanks: {
-    id: string;
-    correctAnswers: string[];
-    userAnswer?: string;
-  }[];
-}
-
-// Explain Your Answer specific types
-export interface ExplainQuestion extends Question {
-  mode: "explain";
-  userExplanation?: string;
-  reasoningScore?: number;
-  reasoningFeedback?: string;
-}
-
-// Attempted question types for results
-export interface AttemptedFillQuestion {
-  question: string;
-  blanks: {
-    correctAnswer: string;
-    userAnswer: string;
-    isCorrect: boolean;
-  }[];
-  overallCorrect: boolean;
-  explanation: string;
-}
-
-export interface AttemptedExplainQuestion {
-  question: string;
-  options: string[];
-  userAnswer: number;
-  correctAnswer: number;
-  answerCorrect: boolean;
-  userExplanation: string;
-  reasoningScore: number;
-  reasoningFeedback: string;
-  explanation: string;
-  totalScore: number;
-}
-
-// Timer configuration
-export interface TimerConfig {
-  enabled: boolean;
-  duration: number;
-}
-
-export interface QuizReport {
-  overallAccuracy: number;
-  difficultyProgression: ("easy" | "medium" | "hard")[];
-  strengths: string[];
-  weaknesses: string[];
-  suggestions: string[];
-}
-
-export interface Quiz {
-  id: string;
-  userId: string;
-  title: string;
-  questions: Question[];
-  highScore: number;
-  lastPlayed?: number;
-}
-
-// Classroom Types
-export interface VirtualClassLink {
-  id: string;
-  title: string;
-  url: string;
-  description?: string;
-  scheduledDate?: number; // timestamp
-  createdAt: number;
-  createdBy: string; // userId
-}
-
-export interface Announcement {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: number;
-  createdBy: string; // userId
-  classroomId: string;
-}
-
-export interface Resource {
-  id: string;
-  title: string;
-  type: 'link' | 'file' | 'note';
-  url?: string;
-  fileUrl?: string;
-  noteId?: string;
-  description?: string;
-  createdAt: number;
-  createdBy: string; // userId
-  classroomId: string;
+  mode?: QuizModeType;
 }
 
 export interface Classroom {
@@ -344,11 +216,95 @@ export interface Classroom {
   description?: string;
   teacherId: string;
   teacherName: string;
-  studentIds: string[]; // Array of enrolled student IDs
+  studentIds: string[];
   virtualLinks: VirtualClassLink[];
   announcements: Announcement[];
-  resources: Resource[];
-  inviteCode: string; // Unique code for students to join
+  resources: ClassroomResource[];
+  inviteCode: string;
+  code?: string; // Alias for inviteCode for backward compatibility
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface VirtualClassLink {
+  id: string;
+  title: string;
+  url: string;
+  description?: string;
+  scheduledDate?: number;
+  createdAt: number;
+  createdBy: string;
+}
+
+export interface Announcement {
+  id: string;
+  classroomId: string;
+  teacherId: string;
+  teacherName: string;
+  title?: string;
+  content: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ClassroomResource {
+  id: string;
+  classroomId: string;
+  resourceType: "note" | "quiz" | "file" | "link";
+  resourceId: string;
+  resourceTitle: string;
+  resourceDescription?: string;
+  url?: string;
+  fileUrl?: string;
+  sharedBy: string;
+  sharedByName: string;
+  sharedAt: number;
+}
+
+export interface Invitation {
+  id: string;
+  classroomId: string;
+  classroomName: string;
+  teacherId: string;
+  teacherName: string;
+  studentEmail: string;
+  studentId?: string;
+  status: "pending" | "accepted" | "declined";
+  createdAt: number;
+  respondedAt?: number;
+}
+
+export interface TeacherStats {
+  id: string;
+  userId: string;
+  totalClassrooms: number;
+  totalStudents: number;
+  totalAnnouncements: number;
+  totalResourcesShared: number;
+  pendingInvitations?: number;
+  lastActivityDate: string;
+}
+
+export type ActivityType =
+  | "student_joined"
+  | "student_accepted_invitation"
+  | "announcement_posted"
+  | "resource_shared"
+  | "resource_copied";
+
+export interface Activity {
+  id: string;
+  classroomId: string;
+  classroomName: string;
+  type: ActivityType;
+  actorId: string;
+  actorName: string;
+  targetId?: string;
+  targetName?: string;
+  timestamp: number;
+  metadata?: any;
+}
+
 // Multiplayer Quiz Types
 export type QuizMode = "singleplayer" | "multiplayer";
 
@@ -403,144 +359,30 @@ export interface QuizRanking {
   rank: number;
 }
 
-// Teacher Role Types
-export type UserRole = "student" | "teacher";
-
-export interface Classroom {
-  id: string;
-  teacherId: string;
-  teacherName: string;
-  name: string;
-  description: string;
-  createdAt: number;
-  updatedAt: number;
-  studentIds: string[];
-  invitationCount?: number;
-  announcementCount?: number;
-  code?: string; // NEW: Unique classroom code for joining
-  codeEnabled?: boolean; // NEW: Toggle code joining
-}
-
-export interface Invitation {
-  id: string;
-  classroomId: string;
-  classroomName: string;
-  teacherId: string;
-  teacherName: string;
-  studentEmail: string;
-  studentId?: string;
-  status: "pending" | "accepted" | "declined";
-  createdAt: number;
-  respondedAt?: number;
-}
-
-export interface Announcement {
-  id: string;
-  classroomId: string;
-  teacherId: string;
-  teacherName: string;
-  content: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
-export interface ClassroomResource {
-  id: string;
-  classroomId: string;
-  resourceType: "note" | "quiz";
-  resourceId: string;
-  resourceTitle: string;
-  resourceDescription?: string;
-  sharedBy: string;
-  sharedByName: string;
-  sharedAt: number;
-}
-
-export interface TeacherStats {
-  id: string;
-  userId: string;
-  totalClassrooms: number;
-  totalStudents: number;
-  totalAnnouncements: number;
-  totalResourcesShared: number;
-  pendingInvitations?: number;
-  lastActivityDate: string;
-}
-
-// Activity Tracking
-export type ActivityType = 
-  | "student_joined" 
-  | "student_accepted_invitation"
-  | "announcement_posted" 
-  | "resource_shared" 
-  | "resource_copied";
-
-export interface Activity {
-  id: string;
-  classroomId: string;
-  classroomName: string;
-  type: ActivityType;
-  actorId: string;
-  actorName: string;
-  targetId?: string;
-  targetName?: string;
-  timestamp: number;
-  metadata?: any;
-}
-
 // Study Resources Community Types
-export type ExamType = 
-  | "JEE"
-  | "NEET"
-  | "GATE"
-  | "ICSE"
-  | "CBSE"
-  | "University"
-  | "Other";
-
-export type Level = 
-  | "10"
-  | "12"
-  | "UG"
-  | "PG"
-  | "Other";
-
-export type PaperType = 
-  | "PYQ"
-  | "Mock"
-  | "Sample"
-  | "Practice";
-
-export type FileType = 
-  | "pdf"
-  | "image";
+export type ExamType = "JEE" | "NEET" | "GATE" | "ICSE" | "CBSE" | "University" | "Other";
+export type Level = "10" | "12" | "UG" | "PG" | "Other";
+export type PaperType = "PYQ" | "Mock" | "Sample" | "Practice";
+export type FileType = "pdf" | "image";
 
 export interface StudyResource {
   id: string;
   userId: string;
-  ownerId: string; // Firebase user ID
-  
-  // Metadata
+  ownerId: string;
   title: string;
   examType: ExamType;
   level: Level;
   subject: string;
   year: number;
-  board: string; // Board or University name
+  board: string;
   paperType: PaperType;
   description?: string;
-  
-  // File information
   fileUrl: string;
   fileName: string;
   fileSize: number;
   fileType: FileType;
-  
-  // Timestamps
   createdAt: number | any;
   updatedAt: number | any;
-  
-  // Engagement metrics (future enhancement)
   viewCount?: number;
   downloadCount?: number;
 }
@@ -575,23 +417,72 @@ export interface PaginatedResources {
   hasPreviousPage: boolean;
 }
 
-export interface UploadResult {
-  fileUrl: string;
-  fileName: string;
-  fileSize: number;
-  mimeType: string;
+// Quiz Types
+export interface Quiz {
+  id: string;
+  userId: string;
+  noteId?: string;
+  title: string;
+  questions: Question[];
+  difficulty: "easy" | "medium" | "hard";
+  createdAt: number;
+  completedAt?: number;
+  score?: number;
+  highScore?: number;
 }
 
-export interface ValidationResult {
-  isValid: boolean;
-  errors: string[];
+export interface QuizReport {
+  quizId: string;
+  userId: string;
+  score: number;
+  totalQuestions: number;
+  correctAnswers: number;
+  timeSpent: number;
+  difficulty: "easy" | "medium" | "hard";
+  completedAt: number;
+  answers: any[];
+  overallAccuracy?: number;
+  difficultyProgression?: ("easy" | "medium" | "hard")[];
+  strengths?: string[];
+  weaknesses?: string[];
+  suggestions?: string[];
 }
 
-export interface SearchResult {
-  resources: StudyResource[];
-  totalCount: number;
-  page: number;
-  pageSize: number;
-  hasMore: boolean;
+export interface QuizAIAnalysis {
+  overallAccuracy: number;
+  difficultyProgression: ("easy" | "medium" | "hard")[];
+  strengths: string[];
+  weaknesses: string[];
+  suggestions: string[];
 }
 
+export interface AttemptedFillQuestion {
+  id: string;
+  question: string;
+  userAnswer: string;
+  correctAnswer: string;
+  isCorrect: boolean;
+  overallCorrect?: boolean;
+  blanks?: any[];
+  explanation?: string;
+}
+
+export interface ExplainQuestion {
+  text: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+}
+
+export interface AttemptedExplainQuestion {
+  question: string;
+  options: string[];
+  userAnswer: number;
+  correctAnswer: number;
+  answerCorrect: boolean;
+  userExplanation: string;
+  reasoningScore: number;
+  reasoningFeedback: string;
+  explanation: string;
+  totalScore: number;
+}
