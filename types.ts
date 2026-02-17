@@ -1,3 +1,6 @@
+export type ViewState = 'landing' | 'onboarding' | 'dashboard' | 'summarizer' | 'notes' | 'routine' | 'focus' | 'quiz' | 'feed' | 'store' | 'classrooms';
+
+export type UserRole = 'student' | 'teacher';
 export type ViewState =
   | "landing"
   | "onboarding"
@@ -21,6 +24,11 @@ export interface UserPreferences {
   id: string;
   isGuest: boolean;
   name: string;
+  role?: UserRole; // Added role field - undefined means not set yet
+  freeTimeHours: number;
+  energyPeak: 'morning' | 'afternoon' | 'night';
+  goal: string;
+  distractionLevel: 'low' | 'medium' | 'high';
   email?: string; // NEW: Store user email
   avatarUrl?: string; // NEW: Store user avatar URL
   role?: UserRole;
@@ -297,6 +305,50 @@ export interface Quiz {
   lastPlayed?: number;
 }
 
+// Classroom Types
+export interface VirtualClassLink {
+  id: string;
+  title: string;
+  url: string;
+  description?: string;
+  scheduledDate?: number; // timestamp
+  createdAt: number;
+  createdBy: string; // userId
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: number;
+  createdBy: string; // userId
+  classroomId: string;
+}
+
+export interface Resource {
+  id: string;
+  title: string;
+  type: 'link' | 'file' | 'note';
+  url?: string;
+  fileUrl?: string;
+  noteId?: string;
+  description?: string;
+  createdAt: number;
+  createdBy: string; // userId
+  classroomId: string;
+}
+
+export interface Classroom {
+  id: string;
+  name: string;
+  description?: string;
+  teacherId: string;
+  teacherName: string;
+  studentIds: string[]; // Array of enrolled student IDs
+  virtualLinks: VirtualClassLink[];
+  announcements: Announcement[];
+  resources: Resource[];
+  inviteCode: string; // Unique code for students to join
 // Multiplayer Quiz Types
 export type QuizMode = "singleplayer" | "multiplayer";
 
