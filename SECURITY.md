@@ -208,7 +208,7 @@ if (apiRateLimiter.isLimited(userId)) {
 import { getSecureKey, initializeSecureKeys } from './services/secureKeyManager';
 
 initializeSecureKeys();
-const apiKey = getSecureKey('GEMINI_API_KEY');
+const apiKey = getSecureKey('VITE_GEMINI_API_KEY');
 if (!apiKey) {
   throw new Error('API key not configured');
 }

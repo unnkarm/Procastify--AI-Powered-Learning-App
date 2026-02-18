@@ -166,7 +166,7 @@ export function initializeApp() {
   initializeSecureKeys();
   
   // Check if required keys are available
-  if (!hasSecureKey('GEMINI_API_KEY')) {
+  if (!hasSecureKey('VITE_GEMINI_API_KEY')) {
     logger.logSecurityIncident(
       'Gemini API key not configured',
       ErrorSeverity.WARNING
@@ -179,7 +179,7 @@ export function initializeApp() {
  * Example 2: Use Secure Keys in API Calls
  */
 export async function callGeminiAPI(prompt: string) {
-  const apiKey = getSecureKey('GEMINI_API_KEY');
+  
   
   if (!apiKey) {
     logger.logSecurityIncident(
@@ -199,7 +199,7 @@ export async function callGeminiAPI(prompt: string) {
  */
 export function monitorKeyUsage() {
   setInterval(() => {
-    const anomalies = checkKeyAnomalies('GEMINI_API_KEY', 100);
+    const anomalies = checkKeyAnomalies('VITE_GEMINI_API_KEY', 100);
     
     if (anomalies.suspicious) {
       logger.logSecurityIncident(

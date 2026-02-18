@@ -142,6 +142,7 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ user, class
       // Log activity
       const { FirebaseService } = await import('../services/firebaseService');
       await FirebaseService.logActivity({
+        id: `${classroom.id}_${Date.now()}_${user.id}`,
         classroomId: classroom.id,
         classroomName: classroom.name,
         type: 'resource_copied',

@@ -63,7 +63,7 @@ Your Procastify application now has **enterprise-grade security** with comprehen
   - Never expose keys in logs or errors
 
 **Configured Keys:**
-- GEMINI_API_KEY (90-day rotation)
+- VITE_GEMINI_API_KEY (90-day rotation)
 - FIREBASE_API_KEY (180-day rotation)
 
 ### 5. **Comprehensive Security Logging** ✅
@@ -134,7 +134,7 @@ if (!validateEmail(userEmail)) throw new Error('Invalid email');
 if (apiRateLimiter.isLimited(userId)) throw new Error('Too many requests');
 
 // Get secure API key
-const key = getSecureKey('GEMINI_API_KEY');
+const key = getSecureKey('VITE_GEMINI_API_KEY');
 
 // Log security events
 logger.logAuthEvent('User logged in', userId, true);
@@ -318,7 +318,7 @@ console.assert(validatePassword('SecurePass123!').valid);
 ### Test Key Management
 ```typescript
 initializeSecureKeys();
-const key = getSecureKey('GEMINI_API_KEY');
+const key = getSecureKey('VITE_GEMINI_API_KEY');
 // Key should be loaded from environment
 ```
 

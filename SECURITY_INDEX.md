@@ -231,7 +231,7 @@ if (!validation.valid) throw new Error(validation.errors[0]);
 if (apiRateLimiter.isLimited(userId)) throw new Error('Rate limit exceeded');
 
 // Get secure key
-const apiKey = getSecureKey('GEMINI_API_KEY');
+const apiKey = getSecureKey('VITE_GEMINI_API_KEY');
 if (!apiKey) throw new Error('API key not configured');
 
 // Log security event

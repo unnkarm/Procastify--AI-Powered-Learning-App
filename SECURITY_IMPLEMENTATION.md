@@ -92,7 +92,7 @@ const passValidation = validatePassword(input);
 import { getSecureKey, initializeSecureKeys } from './services/secureKeyManager';
 
 initializeSecureKeys();
-const apiKey = getSecureKey('GEMINI_API_KEY');
+const apiKey = getSecureKey('VITE_GEMINI_API_KEY');
 ```
 
 ### 5. Security Logging & Monitoring
