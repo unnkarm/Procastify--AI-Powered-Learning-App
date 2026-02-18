@@ -242,15 +242,9 @@ export const initializeSecureKeys = (): void => {
   // Load keys from environment
   typeof window !== 'undefined' ? (() => {
     try {
-      // #region agent log
       const envFromWindow = (window as any).__ENV__ || {};
       const envFromMeta = typeof import.meta !== 'undefined' && (import.meta as any).env ? (import.meta as any).env : {};
-      const geminiFromWindow = envFromWindow.VITE_GEMINI_API_KEY;
-      const geminiFromMeta = envFromMeta.VITE_GEMINI_API_KEY;
-      fetch('http://127.0.0.1:7788/ingest/893c9216-9976-4fef-a25c-26676dbea836',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'589a1f'},body:JSON.stringify({sessionId:'589a1f',location:'secureKeyManager.ts:init',message:'initializeSecureKeys env sources',data:{hasWindowEnv:!!Object.keys(envFromWindow).length,hasMetaEnv:!!(envFromMeta&&Object.keys(envFromMeta).length),hasGeminiFromWindow:!!geminiFromWindow,hasGeminiFromMeta:!!geminiFromMeta},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
-      // Browser environment: use window.__ENV__ or Vite import.meta.env; store under names that getSecureKey() uses
-      const geminiKey = geminiFromWindow ?? geminiFromMeta;
+      const geminiKey = envFromWindow.VITE_GEMINI_API_KEY ?? envFromMeta.VITE_GEMINI_API_KEY;
       if (geminiKey) keyManager.setKey('VITE_GEMINI_API_KEY', geminiKey);
 
       const firebaseKey = envFromWindow.VITE_FIREBASE_API_KEY ?? envFromMeta.VITE_FIREBASE_API_KEY;
@@ -266,11 +260,7 @@ export const initializeSecureKeys = (): void => {
  */
 export const getSecureKey = (name: string): string | null => {
   const result = keyManager.getKey(name);
-  // #region agent log
-  if (name === 'VITE_GEMINI_API_KEY' || name === 'GEMINI_API_KEY') {
-    fetch('http://127.0.0.1:7788/ingest/893c9216-9976-4fef-a25c-26676dbea836',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'589a1f'},body:JSON.stringify({sessionId:'589a1f',location:'secureKeyManager.ts:getSecureKey',message:'getSecureKey result',data:{name,valid:result.valid,hasKey:!!result.key,warning:result.warning},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-  }
-  // #endregion
+
   if (!result.valid) {
     console.error(result.warning);
     return null;

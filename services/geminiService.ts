@@ -11,9 +11,6 @@ initializeSecureKeys();
 
 const getAI = () => {
   const apiKey = getSecureKey('VITE_GEMINI_API_KEY');
-  // #region agent log
-  fetch('http://127.0.0.1:7788/ingest/893c9216-9976-4fef-a25c-26676dbea836',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'589a1f'},body:JSON.stringify({sessionId:'589a1f',location:'geminiService.ts:getAI',message:'getAI apiKey',data:{hasApiKey:!!apiKey},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
-  // #endregion
   if (!apiKey) {
     logger.logSecurityIncident('Gemini API key not configured', 'WARNING' as any);
     throw new APIError('AI service not configured', 503);
