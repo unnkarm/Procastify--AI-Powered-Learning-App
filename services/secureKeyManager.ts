@@ -244,8 +244,13 @@ export const initializeSecureKeys = (): void => {
     try {
       const envFromWindow = (window as any).__ENV__ || {};
       const envFromMeta = typeof import.meta !== 'undefined' && (import.meta as any).env ? (import.meta as any).env : {};
-      const geminiKey = envFromWindow.VITE_GEMINI_API_KEY ?? envFromMeta.VITE_GEMINI_API_KEY;
-      if (geminiKey) keyManager.setKey('VITE_GEMINI_API_KEY', geminiKey);
+      let geminiKey = envFromWindow.VITE_GEMINI_API_KEY ?? envFromMeta.VITE_GEMINI_API_KEY;
+      if (typeof geminiKey === 'string') geminiKey = geminiKey.trim();
+      let setKeyResult: { success: boolean; error?: string } = { success: false };
+      if (geminiKey) setKeyResult = keyManager.setKey('VITE_GEMINI_API_KEY', geminiKey);
+      // #region agent log
+      fetch('http://127.0.0.1:7788/ingest/893c9216-9976-4fef-a25c-26676dbea836',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'589a1f'},body:JSON.stringify({sessionId:'589a1f',location:'secureKeyManager.ts:init',message:'init keys',data:{hasGeminiKey:!!geminiKey,geminiKeyLen:typeof geminiKey==='string'?geminiKey.length:0,setKeySuccess:setKeyResult.success,setKeyError:setKeyResult.error},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
 
       const firebaseKey = envFromWindow.VITE_FIREBASE_API_KEY ?? envFromMeta.VITE_FIREBASE_API_KEY;
       if (firebaseKey) keyManager.setKey('FIREBASE_API_KEY', firebaseKey);
@@ -260,7 +265,9 @@ export const initializeSecureKeys = (): void => {
  */
 export const getSecureKey = (name: string): string | null => {
   const result = keyManager.getKey(name);
-
+  // #region agent log
+  if (name === 'VITE_GEMINI_API_KEY') fetch('http://127.0.0.1:7788/ingest/893c9216-9976-4fef-a25c-26676dbea836',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'589a1f'},body:JSON.stringify({sessionId:'589a1f',location:'secureKeyManager.ts:getSecureKey',message:'getSecureKey',data:{name,valid:result.valid,warning:result.warning},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+  // #endregion
   if (!result.valid) {
     console.error(result.warning);
     return null;
